@@ -1,0 +1,16 @@
+{
+  "name": "openrouter-balance",
+  "version": "1.0.0",
+  "description": "Query OpenRouter account balance and send Feishu notification",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/check.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.0.0"
+  }
+}

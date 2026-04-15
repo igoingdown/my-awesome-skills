@@ -1,0 +1,10 @@
+{
+  "name": "my-awesome-skills",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["skills/*"],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run build"
+  }
+}
