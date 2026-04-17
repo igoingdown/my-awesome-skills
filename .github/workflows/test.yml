@@ -19,3 +19,24 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+
+  test-family-travel-planner:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skills/family-travel-planner
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Verify TypeScript compilation
+        run: npx tsc --noEmit
