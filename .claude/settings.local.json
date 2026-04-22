@@ -17,7 +17,9 @@
       "Bash(curl -s --connect-timeout 10 \"https://restapi.amap.com/v3/geocode/geo?key=cb4fb4047aa6978623bb3fd8a456c723&address=北京\")",
       "Bash(npm run *)",
       "Bash(npm start *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
