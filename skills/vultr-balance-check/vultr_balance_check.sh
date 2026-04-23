@@ -41,7 +41,8 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # 配置默认值
-WORKSPACE="${VULTR_WORKSPACE_PATH:-$HOME/.openclaw/workspace}"
+WORKSPACE="${VULTR_WORKSPACE_PATH/#\~/$HOME}"
+WORKSPACE="${WORKSPACE:-$HOME/.openclaw/workspace}"
 FEISHU_RECEIVER_ID="${FEISHU_RECEIVER_ID:-}"
 
 # 调用 Vultr API
