@@ -46,11 +46,22 @@ WORKSPACE="${WORKSPACE:-$HOME/.openclaw/workspace}"
 FEISHU_RECEIVER_ID="${FEISHU_RECEIVER_ID:-}"
 
 # 调用 Vultr API
-RESPONSE=$(curl -s -H "Authorization: Bearer $VULTR_API_KEY" https://api.vultr.com/v2/account)
+HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $VULTR_API_KEY" https://api.vultr.com/v2/account)
+CURL_EXIT=$?
+HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
 
-# 检查 curl 是否成功
-if [ $? -ne 0 ]; then
-    echo "❌ Error: API request failed"
+if [ $CURL_EXIT -ne 0 ]; then
+    echo "❌ Error: curl 请求失败 (exit=$CURL_EXIT)"
+    exit 1
+fi
+
+# 检查 API 错误（HTTP 非 2xx 或返回体包含 error 字段）
+API_ERROR=$(echo "$RESPONSE" | jq -r '.error // empty' 2>/dev/null)
+if [ "$HTTP_CODE" != "200" ] || [ -n "$API_ERROR" ]; then
+    echo "❌ Vultr API 调用失败 (HTTP $HTTP_CODE)"
+    [ -n "$API_ERROR" ] && echo "   原因: $API_ERROR"
+    echo "   原始响应: $RESPONSE"
     exit 1
 fi
 
