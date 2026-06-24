@@ -66,6 +66,22 @@ npm start -- --origin 北京 --destination 大连 --days 5 --holiday 五一
 
 使用说明：[skills/family-travel-planner/README.md](skills/family-travel-planner/README.md)
 
+### Grafana as Code
+
+Tipsy 后端的「告警即代码 / 看板推送 / 阈值校准」操作 skill（**薄编排**，不复制脚本，
+只负责加载凭证、定位仓库 `deploy/grafana/` 脚本、跑现成工具，并把历史踩坑固化成护栏）：
+- 告警：`alerting/`（tipsy-backend）+ `alerting-recsys/` 的 DRY `spec → generate → validate → push`（Provisioning API）
+- 看板：`push_dashboard.py` 导入/更新看板 JSON（经典 `/api/dashboards/db`）
+- 阈值校准/诊断：`diagnostics/*.py` 只读查 ARMS Prometheus，写阈值前先查真实 series
+
+凭证走 `~/github/my_dot_files/secrets.sh`（`GRAFANA_URL` / `GRAFANA_TOKEN`，token 不落盘）。
+安装：`./skills/grafana-as-code/install.sh`（含依赖与凭证体检）。
+
+使用示例：在 Claude Code 里说
+> "给 voice call 加一条 Agora 离会失败率告警" / "内存告警在误报，帮我校准阈值"
+
+使用说明：[skills/grafana-as-code/README.md](skills/grafana-as-code/README.md)
+
 ## License
 
 MIT
