@@ -24,7 +24,7 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 
 ```
 1. 定评审对象，写指令 codex-review-prompt.md
-2. 异步启动 CodeX (codex exec --search, xhigh, run_in_background)
+2. 异步启动 CodeX (codex --search exec, xhigh, run_in_background)
 3. 轮询产出文件 codex-review.md
 4. 本 Agent 逐条复核 findings + 核验 SOP 出处可达
 5. 给净结论：must-fix / 夸大 / 误读 / SOP 站不住 + 上线建议
@@ -32,7 +32,7 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 
 **步骤 1 — 写指令**：把评审指令写成独立文件（留档、可复跑）。必含要素、A/B/C 三种对象取舍、强制输出结构，见 `references/review-instructions.md`；填空式模板见 `review-prompt-template.md`。
 
-**步骤 2 — 启动**：用 `codex exec` 异步后台运行，命令与逐项要点见 `references/codex-invocation.md`。关键：`--search`（取 SOP 出处）+ `model_reasoning_effort=xhigh`（Thinking=Max）。
+**步骤 2 — 启动**：用 `codex --search exec` 异步后台运行，命令与逐项要点见 `references/codex-invocation.md`。关键：顶层 `--search`（取 SOP 出处，必须放在 `exec` 之前）+ `model_reasoning_effort=xhigh`（Thinking=Max）。
 
 **步骤 3 — 轮询**：不要 `sleep` 空等，靠后台完成通知；进度查看见 `references/codex-invocation.md`。
 
@@ -46,3 +46,12 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 - `<工作目录>/codex-review-prompt.md` —— 评审指令（留档）
 - `<工作目录>/codex-review.md` —— CodeX 报告（含 Findings + Sources cited 出处清单）
 - 本 Agent 对报告的**二次评估** + 上线/合入建议
+
+## 为什么不用原生 `codex review`
+
+CodeX 自带 `codex review` 子命令（`--base` / `--commit` / `--uncommitted` 自动选 diff 范围）。看起来能简化本 skill，但 0.133 实测有两个致命限制，**不适合替代本 skill 的对抗式取证评审**：
+
+1. **`codex review` 不支持联网搜索。** 顶层 `--search` 对 `review` 无效，`-c tools.web_search=true` 也救不回——实测同一 prompt 在 `review` 下返回 `WEB_SEARCH_UNAVAILABLE`，而 `codex --search exec` 能真实搜到权威 URL。本 skill 的铁律「SOP 必带权威出处」依赖搜索，换 `review` 直接失效。
+2. **范围 flag 与自定义 PROMPT 互斥。** `--base` / `--commit` / `--uncommitted` **不能和 `[PROMPT]` 同时使用**（报 `cannot be used with '[PROMPT]'`）。即「自动选范围」和「注入对抗式指令」二选一，等于它唯一的优势也用不上。
+
+因此本 skill 固定走 `codex --search exec`（注入完整对抗式 prompt + 联网取证），不使用 `codex review`。`codex review` 仅适合「纯代码 diff、不需 SOP 取证」的轻量场景，不在本 skill 范围内。
