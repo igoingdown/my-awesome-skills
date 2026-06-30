@@ -24,7 +24,7 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 
 ```
 1. 定评审对象，写指令 codex-review-prompt.md
-2. 异步启动 CodeX (codex --search exec, xhigh, run_in_background)
+2. 异步启动 CodeX (codex --search exec, xhigh, bypass-approvals-and-sandbox, run_in_background)
 3. 轮询产出文件 codex-review.md
 4. 本 Agent 逐条复核 findings + 核验 SOP 出处可达
 5. 给净结论：must-fix / 夸大 / 误读 / SOP 站不住 + 上线建议
