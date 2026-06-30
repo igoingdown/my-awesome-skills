@@ -1,0 +1,107 @@
+# monitoring-loop：定期巡检 + 告警
+
+两件事：(A) 用 `/loop` 让 Claude 周期性巡检看板/日志并分析异常；(B) 用 Logfire alert 做服务端常驻告警。两者互补——alert 负责 7×24 兜底通知，/loop 巡检负责带上下文的主动分析。
+
+## A. 用 /loop 做周期巡检
+
+`/loop` 是 Claude Code skill，按固定间隔重复跑一个 prompt 或 slash 命令：
+
+```
+/loop 10m <巡检 prompt 或 /slash 命令>
+```
+
+- 间隔写法：`5m` / `10m` / `30m` / `1h`，默认 10m。
+- 适合：盯部署、盯成功率、周期性扫新 5xx/告警。
+- **不要**用于一次性任务。
+- 巡检 prompt 要**自包含**（每轮是独立上下文）：写清查什么、基线是多少、发现异常怎么深挖、产出什么。
+
+### 可直接用的巡检 prompt 模板
+
+```
+巡检 tipsy 生产可观测性（最近 30 分钟，deployment_environment='prod'）：
+1. 用 query_run 统计 5xx 与异常：按 http_route / span_name 分组计数（带 LIMIT）。
+2. 用 alert_list 看 5 条规则的 last_run / has_matches；对 has_matches=true 的用 alert_history(filter_matches=true) 拉触发明细。
+3. 与基线对比（基线见下）。只报「新增 / 超基线 / 首次出现」的异常，自愈/已知良性的一句话带过。
+4. 对每个真异常：捞 1 条代表性 trace_id，按 trace 下钻到应用层错误（attributes->>'error' / exception），给出疑似根因 + 是否需要人工介入。
+5. 产出：一段简报（健康/警示/事故三态分类），每条结论附 trace_id 与计数。无异常就回「✅ 正常，关键指标在基线内」。
+```
+
+基线（随项目演进更新，写进巡检 prompt 里）：
+- prod 整体 2xx ≈ 99.8%，全程应 0 个未自愈 5xx。
+- 已知良性：偶发瞬态 5xx 自愈、探针打 test web `/` 长期 500、sunrise timeout 偶发降级（良性）。
+- 判据：**多接口同刻 5xx + QueuePool exception = 共享连接池打满**（非单接口 bug）；**审核类 403 看 audit.rejected 日志不看 span**。
+
+### 巡检铁律
+
+- **别只盯 ERROR（level 17）**：很多失败是 INFO/WARN 级或 200 流内的应用层失败（如 SSE 端点失败裹在 200 里），按**行为特征**查（如 `POST 时延异常`、`agent run 轮数`），不要只 `WHERE level=17`。
+- **瞬态自愈 ≠ 事故**：撞了一下立刻恢复、不复发的，归「良性」，别拉响警报。
+- **新异常才深挖**：每轮先和基线 diff，把精力放在新增/超阈值的，避免重复分析同一已知项。
+
+## B. Logfire alert（服务端常驻告警）
+
+### 读告警 = 读 Logfire，不是读飞书群
+
+飞书告警群**读不到原文**（webhook bot 发的卡片，OpenAPI 历史消息接口返回空；`search:message` scope 被禁）。用户说「读报警群/分析最新告警」时，真正的源头是 Logfire：
+
+- `alert_list(project="tipsy")` → 所有规则 + 每条的 `last_run` / `has_matches` / `has_errors`。
+- `alert_history(alert_id=<uuid>, filter_matches=true, start_timestamp=, end_timestamp=)` → 某规则的历次触发明细。
+
+### tipsy 现有 5 条规则（均 webhook 到飞书）
+
+| id 前缀 | 级别 | 盯什么 | 触发逻辑 |
+|---|---|---|---|
+| `a9f79087` | P0 | 上下文墙 `Input is too long`（用户硬失败） | `is_exception` + message/exception LIKE，`span_name LIKE 'chat %'` |
+| `3f763fc2` | P1 | newapi 渠道缺失 503 `No available channel` | `chat.provider_error` + `No available channel`，按模型分组，总数≥5 才触发 |
+| `86e3460a` | P1 | Sunrise 契约违规（防护型，0 次） | `chat.sunrise.contract_violation` |
+| `f3f7d265` | P1 | Sunrise 摘要失败降级 | `chat.sunrise.failed` 按 `fallback_reason` 分组，grand_total≥3 |
+| `20a39322` | P2 | Sunrise 时延 P95>100s | `chat.sunrise.success` 的 `duration_ms` p95，样本≥5 |
+
+### alert 规则的结构（建/改告警时照抄）
+
+`alert_create` / `alert_update` 的核心字段：
+
+| 字段 | 含义 | 例 |
+|---|---|---|
+| `name` | 规则名（建议带 `[P0]`/`[P1]`/`[P2]` 前缀） | `[P1] newapi 渠道缺失 503` |
+| `description` | 写清：盯什么、口径、正常基线、命中后怎么处置 | 见现有规则，描述里就把 runbook 写进去 |
+| `query` | SELECT；**用聚合 + `HAVING/WHERE total>=N` 过滤孤立偶发**，避免单条噪声刷屏 | 见下 |
+| `time_window` | 评估窗口（ISO 8601 duration） | `PT1H` / `PT10M` / `P1D` |
+| `frequency` | 多久评估一次 | `PT15M` / `PT10M` / `PT1H` |
+| `watermark` | 数据延迟补偿 | `PT1M` |
+| `notify_when` | `has_matches`（有结果就通知） | `has_matches` |
+| `channels` | 通知渠道（飞书 webhook 已配，复用现有 channel id） | `0e41be0c-...` |
+| `environments` | 限定环境，空=全部（规则里多在 query 内写 `='prod'`） | `[]` |
+
+设计要点：
+- **window 与 frequency 对齐**（如都 `PT10M`）可避免重复计数/刷屏。
+- query 里**带上命中条数 + 关键维度**（模型名/route/reason），这样飞书卡片正文就有上下文。
+- 阈值留余量过滤正常波动（如「7 天约 5 次」就设 1h 内≥3 才报）。
+
+建告警示例（5xx 突增）：
+
+```jsonc
+alert_create(
+  project = "tipsy",
+  name = "[P1] prod 5xx 突增",
+  description = "近10分钟 prod 5xx 总数≥10 触发。正常应≈0。命中后按 route 看分布，捞 trace 下钻应用层 error。",
+  query = "SELECT http_route AS route, count(*) AS cnt, sum(count(*)) OVER () AS total FROM records WHERE deployment_environment='prod' AND http_response_status_code>=500 GROUP BY http_route HAVING sum(count(*)) OVER () >= 10 ORDER BY cnt DESC",
+  time_window = "PT10M",
+  frequency = "PT10M",
+  watermark = "PT1M",
+  notify_when = "has_matches"
+)
+```
+
+> 改/删告警前先 `alert_list` 拿 id 与现状，跟用户确认再动；`alert_status` 看启停。
+
+## 巡检 + 看板 + 告警怎么配合
+
+- **临时盯一件事**（如刚发布、跟一个 bug）→ `/loop` 巡检，灵活、带分析、用完即停。
+- **长期固化的健康面**→ 做成 `dashboard-panels.md` 看板，人随时看。
+- **要被动收到通知**（不盯屏）→ Logfire alert，webhook 到飞书。
+- 三者常一起上：巡检发现新问题 → 建看板长期观察 → 加 alert 兜底通知。
+
+## 下一步
+
+- 巡检/告警命中了 → `rca-trace.md` 下钻根因。
+- 不确定值不值得专门修 → `quant-decision.md`。

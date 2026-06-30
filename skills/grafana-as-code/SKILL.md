@@ -19,6 +19,20 @@ description: >
 Prometheus uid `efflgyrdjhyiof`(**prod 专属**,跨环境 uid 不同),告警统一上报飞书联系点
 `feishu-tipsy-alerts`(经 CF Worker + HMAC)。
 
+## 和 logfire-ops 的边界("读告警"歧义先看这里)
+
+本 skill 与 `logfire-ops` 都涉及"告警/看板",但**监控对象不同,不要混用**:
+
+- **grafana-as-code(本 skill)= 基础设施指标**:Grafana alert 盯的是 ARMS Prometheus 指标
+  (内存、circuit_state、时延桶、namespace 等),告警走 `deploy/grafana/` 的
+  spec→generate→push;看板走经典 Grafana API。
+- **logfire-ops = 应用层 telemetry**:Logfire alert 盯的是应用 trace/日志信号
+  (Input too long、newapi 渠道缺失 503、sunrise 等);看板是 Logfire dashboard(Perses)。
+
+本 skill 的强项是**写**:加/改告警规则、校准阈值、推看板。**当用户只说"读一下线上告警"
+未指明平台时**,那多半是想**看现有告警状态**——若指基础设施指标(内存/时延/Prometheus)用本
+skill;若指应用层 telemetry 告警,那属于 logfire-ops。**不确定就先反问澄清**,别默默猜一个。
+
 ---
 
 ## 按任务读对应手册(分层暴露,只读当前任务相关那份)
