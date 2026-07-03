@@ -4,3 +4,5 @@ dist/
 .DS_Store
 venv/
 __pycache__/
+.agents/
+.claude/
