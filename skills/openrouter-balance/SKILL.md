@@ -46,7 +46,7 @@ node ~/.agents/skills/openrouter-balance/dist/check.js
 
 ### 每小时执行（macOS - launchd）
 
-创建 `~/Library/LaunchAgents/com.openrouter.balance.plist`：
+创建 `~/Library/LaunchAgents/com.openrouter.balance.plist`（`__HOME__` 替换为你的实际 $HOME，launchd 不解析环境变量）：
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -57,7 +57,7 @@ node ~/.agents/skills/openrouter-balance/dist/check.js
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/node</string>
-        <string>/Users/bytedance/.agents/skills/openrouter-balance/dist/check.js</string>
+        <string>__HOME__/.agents/skills/openrouter-balance/dist/check.js</string>
     </array>
     <key>StartInterval</key>
     <integer>3600</integer>
@@ -76,7 +76,7 @@ launchctl load ~/Library/LaunchAgents/com.openrouter.balance.plist
 
 编辑 crontab：`crontab -e`
 ```
-0 9 * * * cd /Users/bytedance/.agents/skills/openrouter-balance && node dist/check.js
+0 9 * * * cd $HOME/.agents/skills/openrouter-balance && node dist/check.js
 ```
 
 ## 输出示例

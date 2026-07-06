@@ -24,6 +24,56 @@ Query OpenRouter account balance and send Feishu notification.
 
 使用说明：[skills/openrouter-balance/README.md](skills/openrouter-balance/README.md)
 
+### New API Usage
+
+查询 new-api / one-api 系 LLM 网关的**当日用量**并推送飞书私聊：
+- 按模型聚合：美元花费 / tokens / 调用次数，附账户余额
+- 每小时定时执行（macOS launchd / Linux cron 均支持）
+- 推送降噪：用量无变化不重复推送，跨天自动重置
+- token 失效自动推 ⚠️ 告警（同一错误只推一次）
+- 敏感配置（实例地址 / 令牌 / 用户 id / 接收人 open_id）全部走仓库外的 secrets 文件
+
+使用示例：在 Claude Code 里说
+> "今天 LLM 用了多少" / "配一下每小时用量推送"
+
+使用说明：[skills/newapi-usage/SKILL.md](skills/newapi-usage/SKILL.md)
+
+### CodeX Adversarial Review
+
+把 spec/设计方案、代码/PR 交给**外部 CodeX CLI** 做对抗式独立评审（独立模型、独立读码、职责是证伪而非附和），适合"方案已定将开工"或"代码写完将合入"的最后一道门。
+
+使用示例：在 Claude Code 里说
+> "把这个方案发给 CodeX review" / "合入前找 CodeX 挑挑刺"
+
+使用说明：[skills/codex-adversarial-review/SKILL.md](skills/codex-adversarial-review/SKILL.md)
+
+### IPP Print
+
+macOS 上通过 IPP 协议直连办公室网络打印机打印 PDF，并在**打印机侧**做真实出纸验证：
+- 网段扫描发现打印机 IP、检查状态/能力
+- 加密 PDF 自动重写后再发（部分打印机拒收加密 PDF）
+- 打印失败排查手册（CUPS 显示 completed 但没出纸等经典坑）
+
+使用说明：[skills/ipp-print/SKILL.md](skills/ipp-print/SKILL.md)
+
+### Long Task Manager
+
+面向大 spec/plan 文档的长任务执行管理：初始化持久化 `state.md`、管理进度、把重上下文工作委派给 subagent/workflow、compaction/resume 后自动恢复，直到完成或遇到可证明的 blocker。
+
+使用说明：[skills/long-task-manager/SKILL.md](skills/long-task-manager/SKILL.md)
+
+### Volcengine Balance Check
+
+查询火山引擎账户消费信息（余额/账单），凭证走环境变量。
+
+使用说明：[skills/volcengine-balance-check/SKILL.md](skills/volcengine-balance-check/SKILL.md)
+
+### Vultr Balance Check
+
+查询 Vultr 账户余额和当月待扣费用，凭证走 `.env`（不进仓库）。
+
+使用说明：[skills/vultr-balance-check/SKILL.md](skills/vultr-balance-check/SKILL.md)
+
 ### Interview Comment
 
 面向**后端/算法/大数据研发**岗位的严格面试评价生成器：
