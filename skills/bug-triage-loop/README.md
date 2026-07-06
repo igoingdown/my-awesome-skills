@@ -65,7 +65,7 @@ skills/bug-triage-loop/
 
 ## 精度硬约束
 
-来自两次真实事故复盘(2026-07 "reset OC" 6 次翻案 + 2026-07 pay Not Bound 开错仓 + 存量未补)。**不遵守直接导致误报或错案**。
+来自两次真实事故复盘(一次 absence-signal 类事故导致多次翻案 + 一次支付相关事故开错仓 + 存量未补)。**不遵守直接导致误报或错案**。
 
 - **证据分级 tag**:`ground_truth / strong_signal / absence_signal / inference / hypothesis` 五档,定义见 `prompts/rubric.md`
 - **`confirmed` 三方齐门槛**(严于旧版):必须同时有

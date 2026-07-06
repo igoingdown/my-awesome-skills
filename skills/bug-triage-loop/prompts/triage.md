@@ -33,7 +33,7 @@
 
 ## 输入完整性 (**判定前必须做, 不许跳**)
 
-**规则来自 2026-07 事故**: 用户上报"聊天记录 reset OC 没有用"配 2 张截图。AI 只读了字面标题, 4 轮排查后才被用户点出截图里明确写着 `mempoints references different characters` — 用户抱怨的是远程 memory 服务不是 chat 存储。**技术方向从头错**。
+**规则来自一次真实事故复盘**: 用户上报"XX 功能没用"配 2 张截图。AI 只读了字面标题, 多轮排查后才被用户点出截图里明确写着一段关键技术信息 — 用户抱怨的是另一处存储/服务, 不是 AI 一开始假设的那个模块。**技术方向从头错**。
 
 判定前必须逐一完成:
 
@@ -42,11 +42,11 @@
    - 每张图用 Read tool 打开 OCR (视觉模型自动做), **提取图内所有文本 verbatim**
    - 图内文本作为原始上报的**同权重部分**参与判定, 不许只看第一段中文标题
 2. **技术名词 逐个消歧**:
-   - 用户话里出现的每个技术名词/实体 (角色名、接口名、"记忆"/"聊天记录"/"账号"/"缓存" 等) 单独提取
-   - 每个名词标注**对应仓库里的准确技术组件**, 例如:
-     - "聊天记录" → 可能是 chat_conversation_history / character_call_summary / message_id / 前端 UI 缓存
-     - "记忆" → 可能是 `character_memory.pin_memory_content` / `character_memory` 表其它字段 / 远程 memory 服务 (mempoints) / `character_call_summary` / `user_character_relationship_memory`
-     - "reset OC" → `POST /api/v1/chat/reset_oc` API, 但用户说的"reset"可能指前端"重开对话"按钮, 也可能是别的 UI 动作
+   - 用户话里出现的每个技术名词/实体 (对象名、接口名、口语化功能称呼 等) 单独提取
+   - 每个名词标注**对应仓库里的准确技术组件**, 例如(以下为模式示例, 具体映射按你项目的数据模型):
+     - 一个用户口语("XX 记录") → 可能对应**多个**具体存储(某主表 / 某汇总缓存 / 某消息队列 / 前端 UI 状态), 逐个映射清楚
+     - 一个业务概念("XX 数据") → 可能**横跨多个服务**(本地 DB 字段 / 远程微服务 / 另一张汇总表), 标注具体是哪个
+     - 用户提到的"操作名"("重置"/"清空") → 可能是服务端 API, 也可能是前端 UI 动作, 要区分清楚
    - **禁止**把这些名词混用。判定和后续 SLS/DB 查证都必须绑定到明确的技术组件, 而不是用户口中的模糊词
 3. **追问所在讨论线程一并读**:
    - 上报的原贴 + 后续 30 分钟内群内所有回复 (追问、当值同学质疑、@人 dd) 必须一起提取
@@ -118,7 +118,7 @@
 **注意**:下面是**示例枚举**,用户应根据自己项目 `docs/config.md` § "涉及的仓库" 表 + 业务范围替换。skill 不硬编码 module 名。
 
 - **chat**:聊天记录、消息发送、SSE
-- **memory**:记忆检索、mempoint、character_knowledge
+- **memory**:记忆检索 / 相关的记忆存储与缓存(具体字段按你项目定义)
 - **character**:角色可见性、trending/latest/web、审核状态
 - **audit**:内容审核、NSFW/未成年过滤
 - **pay**:订单、订阅、宝石/虚拟币消费(**独立微服务的候选仓,如 `*-subscription` / `*-payment` 必须一起扫**)
@@ -140,16 +140,16 @@
 **not_bug 示例**:
 > "刚测完了,没问题" → not_bug, "确认反馈,非新 bug"
 > "@某某 dd 一下" → not_bug, "纯 @追问,不是新 bug"
-> "@王若燚 用户之前订阅绑定了 uid:xxx 未过期" → not_bug, "这是别人的分析结论,不是新 bug"
+> "@某某 用户之前订阅绑定了 uid:xxx 未过期" → not_bug, "这是别人的分析结论,不是新 bug"
 > "想问一下这个之前有处理过吗?我看用户一直没被回复" → not_bug, "meta 讨论,不是新 bug"
 
 **real_bug 示例(text 顶帖)**:
 > "iOS 上切换角色后聊天记录消失了,uid=A123 刚才在 iOS 上试的"
-> → real_bug, extracted = {title:"切换角色后聊天记录消失", module:"chat", platform:"ios", affected_uid:"A123", severity:"high", keywords:["切换角色","聊天消失","GetChatList"]}
+> → real_bug, extracted = {title:"切换角色后聊天记录消失", module:"chat", platform:"ios", affected_uid:"A123", severity:"high", keywords:["切换角色","聊天消失","<相关接口名>"]}
 
 **real_bug 示例(post 工单转发格式)**:
-> "【web端打开limitless开关后没有同步到iOS】(工单号2856)\n-keo [BEAN], — 6/27/26, 11:04 AM\nI was to..."
-> → real_bug, extracted = {title:"web端 limitless 开关未同步到 iOS", module:"character", platform:"web", affected_uid: null(工单未直接给), severity:"medium", keywords:["limitless","开关","同步","web","ios"]}
+> "【web端打开某开关后没有同步到iOS】(工单号XXXX)\n-<用户名>, — <日期>, 11:04 AM\nI was to..."
+> → real_bug, extracted = {title:"web端某开关未同步到 iOS", module:"character", platform:"web", affected_uid: null(工单未直接给), severity:"medium", keywords:["开关","同步","web","ios"]}
 > 注:post 转发格式的标题通常在【】里,工单号在括号里,原文在下方。抽取时 title 用【】里的文字,keywords 从原文抽,affected_uid 若原文无则留 null。
 
 **duplicate 示例**:

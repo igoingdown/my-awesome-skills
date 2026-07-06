@@ -159,7 +159,7 @@ jq -r '"\(.verdict) \(.severity // "-")"' state/processed.jsonl | sort | uniq -c
 
 ### state/ 提交策略
 
-`state/` 里含真实事故内容(uid / open_id / 内部人名 / 生产 orig_txn 等),**不要 push 到公开仓**。若要多机同步,push 到私有仓。
+`state/` 里含真实事故内容(uid / open_id / 内部人名 / 生产交易键等),**不要 push 到公开仓**。若要多机同步,push 到私有仓。
 
 **不要**手动编辑 state/ 里的文件。所有变更走 skill 或 review 回复。
 

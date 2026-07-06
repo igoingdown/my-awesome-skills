@@ -21,7 +21,7 @@ description: 拉飞书 Bug 群的新消息(含最近 N 天历史)按新→旧倒
 | 拉群历史消息 | `lark-im` | `+chats-messages-get`(通过 Skill 工具唤起) |
 | 发飞书私聊推送 | `lark-im` | `+messages-send` |
 | 查 open_id / 姓名 | `lark-contact` | `+search-user` / `+get-user` |
-| 查 SLS/DB/memory 等生产数据 | 项目侧 oncall / debug skill(如 `tipsy-debug`),或直接用 aliyun-sls / bytebase / signoz MCP | 按各自 skill 或 MCP 文档 |
+| 查 SLS/DB/memory 等生产数据 | 项目侧 oncall / debug skill(如 `<project>-debug`),或直接用 aliyun-sls / bytebase / signoz MCP | 按各自 skill 或 MCP 文档 |
 | 定位代码 | 项目侧 code-analyze skill(如 `bug-analyze`),或让主 loop 自己 Read + grep | — |
 | lark-cli 权限/身份问题 | `lark-shared` | 参考它的 auth 章节 |
 
@@ -60,7 +60,7 @@ Step 13 清理 worktree + 退出。用户 review 后回复 approve/reject/defer,
 配置项:
 - `bug_chat_id`(必)
 - `my_open_id`(必)
-- `github_root`(必,如 `/Users/zhaomingxing/github`)
+- `github_root`(必,如 `/Users/<username>/github`)
 - `history_backfill_days`(默认 60)
 - `quiet_hours`(默认 22:00-08:00)
 - `workflow_min_evidence_sources`(默认 3)
@@ -134,12 +134,12 @@ jq -c --slurpfile p <(jq -R . /tmp/bug-triage-processed-ids.txt | jq -s .) '
 
 按 `prompts/triage.md` 由 LLM 自己判定。输入:target 消息 JSON + processed.jsonl 里最近 30 天 real_bug 的 title/module(用于语义去重)。
 
-**Step 6 前置硬约束 (来自 2026-07 事故, 违反视为不合格)**:
+**Step 6 前置硬约束 (来自一次真实事故复盘, 违反视为不合格)**:
 
 1. **附件 100% 提取**: 消息里所有 `![Image](img_xxx)` 必须用 `lark-im +messages-resources-download --file-key img_xxx --type image --output img.png` 下载, 每张图用 Read tool 打开 (视觉 OCR 会自动做), 提取 verbatim 文本纳入判定输入。**未提取任一张附件, 禁止进入 Step 6**。
 2. **技术名词消歧**: 见 `prompts/triage.md` §输入完整性, 把用户话里每个技术名词映射到明确的仓库组件, 消歧完才能推进。
 3. **投诉时间窗计算**:
-   - 从消息 `create_time` 换算 unix 秒 (UTC+8, `TZ=Asia/Shanghai date -d '2026-07-03 11:19' +%s`)
+   - 从消息 `create_time` 换算 unix 秒 (UTC+8, `TZ=Asia/Shanghai date -d '2026-01-02 11:19' +%s`)
    - 记 `report_ts_utc8`
    - 后续所有 SLS 查询默认窗口 = `[report_ts - 7200, report_ts + 7200]` (±2h)
    - 该窗口无数据 → 明确判"回顾性投诉", 扩窗到 `[report_ts - 7*86400, report_ts]` (最近 7 天), 找该 uid 最后一次相关操作
@@ -154,7 +154,7 @@ cat >> state/processed.jsonl <<< '{"message_id":"...","processed_at":"ISO8601","
 
 ### Step 7:定位(worktree 隔离 + dynamic workflow 并发)
 
-**Step 7 硬约束 (来自 2026-07 事故, 违反 = inference 证据全降级)**:
+**Step 7 硬约束 (来自一次真实事故复盘, 违反 = inference 证据全降级)**:
 
 - **任何"代码路径推理"必须先 Read 完整函数体** (从 `func` 签名到闭合 `}`), 不许只用 grep 到的一行推理其行为
 - **调用链每一跳都要读**: 例如"A 调 B 调 C 里查 DB"这类结论, 必须把 A/B/C 三个函数体都 Read 过
@@ -163,7 +163,7 @@ cat >> state/processed.jsonl <<< '{"message_id":"...","processed_at":"ISO8601","
 
 **第一步:module → 候选仓扫描(必做,不许跳)**
 
-**规则来自 2026-07 pay Not Bound 事故**:AI 默认在主后端仓找根因,遇到独立微服务(subscription / memory)就抓瞎,浪费一整轮 workflow 才发现开错仓。因此:
+**规则来自一次支付相关真实事故复盘**:AI 默认在主后端仓找根因,遇到独立微服务(subscription / memory 等)就抓瞎,浪费一整轮 workflow 才发现开错仓。因此:
 
 1. **先扫 `<github_root>/*` 拿到你项目下所有候选仓的实际清单**:
    ```bash
@@ -224,15 +224,15 @@ done
 - 只读:不 checkout 到新分支,不 commit,不 push
 - **分支必须以 config.md 仓库表为准**,skill 不猜。如果表里没写,skill 会打 WARN 让你回来补表,不做静默默认
 
-**Subagent prompt 硬约束(P1 规则,来自 2026-07 pay 事故)**:
+**Subagent prompt 硬约束(P1 规则,来自一次支付相关真实事故复盘)**:
 
 若 Step 7 通过 Workflow / Agent 派子 agent 做定位,主 loop 在写 prompt 时必须做:
 
-- **贴现网数据快照**:若已知 uid / cid / orig_txn / order_id 等实体,主 loop 应**先自己**做一次 bytebase 快查(SELECT * FROM 主表 WHERE 实体键 = ?),把结果原样嵌到子 agent 的 prompt "背景" 段。**子 agent 不负责去查主表看实体是否已存在**,那是主 loop 的活。
+- **贴现网数据快照**:若已知 uid / <主键> / <交易键> / order_id 等实体,主 loop 应**先自己**做一次 bytebase 快查(SELECT * FROM 主表 WHERE 实体键 = ?),把结果原样嵌到子 agent 的 prompt "背景" 段。**子 agent 不负责去查主表看实体是否已存在**,那是主 loop 的活。
 - **子 agent 的定位是"代码理解 + 数值推演",不是"数据获取"**:数据由主 loop 前置,子 agent 只做基于给定数据的推理。
 - 若主 loop 因 MCP 暂时断连拿不到快照,应在 prompt 里明确写 "主表快照未拿到, 子 agent 请在假设分支里给出 A/B 两条推理路径" 而不是让子 agent 自己去查(避免子 agent 想当然)。
 
-**反例(2026-07 pay Not Bound 事故)**:主 loop 让子 agent 判断"用户 orig_txn=X 是不是同链续订",子 agent 没先查数据库直接假设 X 是首订 → 结论错。若主 loop 前置贴了"库里 uid 已有 orig_txn=Y 旧订阅链记录, X 是新链"的快照,子 agent 就不会错。
+**反例(支付类事故)**:主 loop 让子 agent 判断"用户 <某交易键>=X 是不是同链续订",子 agent 没先查数据库直接假设 X 是首订 → 结论错。若主 loop 前置贴了"库里 uid 已有 <某交易键>=Y 旧订阅链记录, X 是新链"的快照,子 agent 就不会错。
 
 **第三步:估证据源数量,决定串行 vs workflow**。
 
@@ -348,7 +348,7 @@ jq -c -n \
 
 ### Step 12.5:Handoff owner(verdict=confirmed 且存在存量待补 时必做)
 
-**规则来自 2026-07 pay 事故**:确认 bug + 找到修复 commit 后,只写"建议调 recover"是不够的。真正闭环需要把**具体存量清单 + 处置人**都定位到,不然存量继续挂着。
+**规则来自一次支付相关真实事故复盘**:确认 bug + 找到修复 commit 后,只写"建议调 recover"是不够的。真正闭环需要把**具体存量清单 + 处置人**都定位到,不然存量继续挂着。
 
 若 verdict=confirmed 且证据显示"修复代码已存在但存量未自动补",Step 12.5 强制做以下动作:
 
@@ -361,7 +361,7 @@ jq -c -n \
    git -C "${WT_POOL}/<repo>" log --oneline --ancestry-path <fix_commit>..origin/<branch> --merges -3
    ```
 2. **拉全量存量清单**(SLS 反查 + bytebase 交叉):
-   - SLS 关键字 grep pre-fix 期间 bug 触发日志,抽出所有独立实体键(uid / orig_txn / order_id 等)
+   - SLS 关键字 grep pre-fix 期间 bug 触发日志,抽出所有独立实体键(uid / <交易键> / order_id 等)
    - 对每个键去主表查一遍现网状态:"已恢复 / 未恢复"
    - 生成"未恢复存量清单"表(uid + 键 + 现网状态 + 上次触发时间)
 3. **找处置人**:
@@ -437,7 +437,7 @@ open('state/review-queue.jsonl', 'w').writelines(lines)
 - **项目侧 oncall/debug/code-analyze skill 或 MCP 失败**:降级为 verdict=needs-more-signal,markdown 里说明"定位失败原因"
 - **本 skill 抛异常**:异常写 state/loop.log,不写 review-queue,下次 loop 重新挑同一 message_id(因未进 processed)
 
-### MCP 反复 Stream closed 兜底(P1 规则,来自 2026-07 事故)
+### MCP 反复 Stream closed 兜底(P1 规则,来自一次真实事故复盘)
 
 若同一 MCP 工具在短时间内(< 5 分钟)连续 Stream closed **3 次或以上**,主 loop 不再盲目重试,而是主动切策略:
 

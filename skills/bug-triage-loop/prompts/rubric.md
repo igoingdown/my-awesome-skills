@@ -30,13 +30,13 @@
 
 ### confirmed (score >= 0.85)
 
-**触发条件(**全部**满足,来自 2026-07 pay Not Bound 事故复盘,严于旧版)**:
+**触发条件(**全部**满足,来自一次支付相关真实事故复盘,严于旧版)**:
 
 - **三方 ground_truth 齐备**(三方缺一不可):
   1. ≥1 条 ground_truth 来自**现网数据**(bytebase / DMS 主表 SELECT 命中或未命中、Lindorm COUNT、精确 uid+trace 的生产 SLS 命中)
   2. ≥1 条 ground_truth 来自**代码**(完整函数体已读,`Read` 过从 func 签名到闭合 `}`,不是 grep 一行)
   3. ≥1 条 ground_truth 来自**修复线索**(修复 commit / PR / 已存在的 workaround / backfill 接口的实际代码位置)
-- **三方数值 / 时间戳 / uid 一致**:不能一方说"用户 06-27 触发",另一方说"07-04",第三方对不上;必须能拿三个 timestamp 或三个 uid/orig_txn 摆一起彼此印证
+- **三方数值 / 时间戳 / uid 一致**:不能一方说"用户 <日期 A> 触发",另一方说"<日期 B>",第三方对不上;必须能拿三个 timestamp 或三个 uid/<交易键> 摆一起彼此印证
 - 主假设 = 三方交集能推出的唯一结论,不是多方候选
 
 **输出必须包含**:
@@ -46,7 +46,7 @@
 - 影响面(受影响用户估算,尽可能给全量清单,不能只给"至少 10+")
 - **存量 handoff 状态**(参考 SKILL.md Step 12.5):owner / 私信草稿路径 / 已恢复 vs 未恢复的清单
 
-**反例(2026-07 pay 事故)**:
+**反例(支付类事故)**:
 
 - 只有代码 + SLS 的 confirmed 报告是**不够的**,必须再拿 bytebase 主表行(存量是否已入库)作为第 3 方交叉,不然会把"已修但存量未补"误判为 "confirmed 全解决"。
 - "现网 SLS 精确命中 + 代码 diff 已读" 是必要不充分,还需要"修复 commit 的具体位置"这一方。
@@ -77,13 +77,13 @@
   "instrumentation_plan": {
     "spans": [
       {
-        "file": "internal/chat/chat_service.go",
+        "file": "internal/<domain>/<domain>_service.go",
         "line": 221,
-        "function": "GetChatList",
-        "span_name": "get_chat_list",
+        "function": "<HandlerFunc>",
+        "span_name": "<domain>_list_query",
         "fields": [
           {"name": "uid", "type": "string"},
-          {"name": "requested_character_id", "type": "string"},
+          {"name": "requested_key", "type": "string"},
           {"name": "matched_count", "type": "int"},
           {"name": "filter_applied", "type": "string"}
         ],
@@ -92,9 +92,9 @@
     ],
     "alerts": [
       {
-        "name": "chat_list_empty_return",
-        "condition": "matched_count=0 for GetChatList > 100/5min",
-        "channel": "飞书 SRE 群"
+        "name": "<domain>_list_empty_return",
+        "condition": "matched_count=0 for <HandlerFunc> > 100/5min",
+        "channel": "<你的告警通知渠道>"
       }
     ],
     "observation_window": "3-7 天",
@@ -127,11 +127,11 @@
 
 ## 证据分级 (**打分前必须先分级, 每一条证据都要标 tag**)
 
-**背景**: 本节的存在是因为一次真实事故 (2026-07 reset OC 事故): AI 因把"SLS 0 命中"和"接口返回空"当硬证据, 6 次翻案。规则如下:
+**背景**: 本节的存在是因为一次真实事故复盘: AI 因把"SLS 0 命中"和"接口返回空"当硬证据, 多次翻案后才收敛真根因。规则如下:
 
 | Tag | 说明 | 单条最高贡献 | Confirmed 是否可只靠这类 |
 |---|---|---:|---|
-| `ground_truth` | DB 直查行/行数、Postgres SELECT、Lindorm COUNT、生产 SLS 明确命中的 uid+cid trace、代码 grep 到具体行 (**签名+return 都读了**) | 0.40 | **必须**至少 1 条 |
+| `ground_truth` | DB 直查行/行数、Postgres/MySQL SELECT、KV COUNT、生产 SLS 明确命中的 uid+<主键> trace、代码 grep 到具体行 (**签名+return 都读了**) | 0.40 | **必须**至少 1 条 |
 | `strong_signal` | SLS 有精确关键字 + uid 命中、Grafana 指标异常时段吻合投诉、trace_id 完整链路吻合 | 0.25 | 单靠不行 |
 | `absence_signal` | SLS 关键字 0 命中、接口返回空、grep 不到某函数、DB 查无该行 | **0.15 上限, 且必须先验索引/参数无误** | **单靠绝对不行** |
 | `inference` | 沿代码链推理"这里应该走那条分支"、"若命中该 case 则..."、按 llmdoc 记忆推 | 0.10 | 单靠不行 |
@@ -167,5 +167,5 @@
 - ❌ SLS 里搜到 500 → 判 confirmed。**正确**:500 可能是下游依赖挂了,不是这个 bug 的直接原因,除非能对应到用户复现的时间点
 - ❌ bug-analyze 找到一段"可能相关"的代码 → 判 likely。**正确**:除非能对应到用户描述的现象,否则算 needs-more-signal
 - ❌ 用户能复现 → 加分。**正确**:用户能复现不代表你能定位,权重只有 0.05
-- ❌ **"SLS 全局 0 命中该关键字, 因此该接口未被调用"** → 判 confirmed 不 bug。**正确**: 0 命中前必须先做**全局命中数 sanity check** (不带 uid 过滤看关键字本身有没有索引); 全局都 0 意味着 SLS 索引不含或日志未落该 logstore, 不能推"没调用"。**这个规则来自 2026-07 事故**
-- ❌ **"接口返回空数组, 因此后端已清"** → 判 confirmed 不 bug。**正确**: 空可能来自参数错 (查错 session_id / 单位错 / 时区错) / 权限静默过滤 / 数据在别的分片。必须做**同 uid 换个 cid 的对照实验**, 证明账号能拉到别的非空数据, 才算证据。**这个规则来自 2026-07 事故**
+- ❌ **"SLS 全局 0 命中该关键字, 因此该接口未被调用"** → 判 confirmed 不 bug。**正确**: 0 命中前必须先做**全局命中数 sanity check** (不带 uid 过滤看关键字本身有没有索引); 全局都 0 意味着 SLS 索引不含或日志未落该 logstore, 不能推"没调用"。**这个规则来自一次真实事故**
+- ❌ **"接口返回空数组, 因此后端已清"** → 判 confirmed 不 bug。**正确**: 空可能来自参数错 (查错 session_id / 单位错 / 时区错) / 权限静默过滤 / 数据在别的分片。必须做**同 uid 换个 <次键> 的对照实验**, 证明账号能拉到别的非空数据, 才算证据。**这个规则来自一次真实事故**

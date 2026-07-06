@@ -11,27 +11,27 @@
 ```markdown
 ## Bug review: <title>
 
-**AI 判定**:real_bug | **实锤等级**:likely (score: 0.72) | **严重度**:high | **模块**:chat
-**上报人**:<@name via ou_xxx> | **上报时间**:2026-07-03 14:22 +08:00 | **message_id**:`om_xxx`
+**AI 判定**:real_bug | **实锤等级**:likely (score: 0.72) | **严重度**:high | **模块**:`<domain>`
+**上报人**:<@name via ou_xxx> | **上报时间**:`<YYYY-MM-DD HH:MM>` +08:00 | **message_id**:`om_xxx`
 
 ### 根因假设
 
-前端切换角色时携带**新角色 character_id**,但历史聊天记录按**旧 character_id** 索引存储,`chat_service.go:L221` 用请求里的新 id 过滤,导致 `matched_count=0`。
+前端切换实体时携带**新 primary_key**,但历史数据按**旧 primary_key** 索引存储,`<domain>_service.go:L221` 用请求里的新 key 过滤,导致 `matched_count=0`。
 
 ### 建议:先加打点验证(rubric=likely 不 100% 确定)
 
-- **位置**:`chat_service.go:L221`(GetChatList)
-- **加 span**:`get_chat_list`,字段 uid / requested_character_id / matched_count / filter_applied
-- **加告警**:`chat_list_empty_when_history_exists`,matched_count=0 但 chat_metadata 有历史 → 5min > 20 次触发
+- **位置**:`<domain>_service.go:L221`(`<HandlerFunc>`)
+- **加 span**:`<domain>_list_query`,字段 uid / requested_key / matched_count / filter_applied
+- **加告警**:`<domain>_list_empty_when_history_exists`,matched_count=0 但 `<main_table>` 有历史 → 5min > 20 次触发
 - **观察窗口**:3 天
 
 <details>
 <summary>点开查看:我做了什么定位</summary>
 
-1. **[SLS]** 查 uid=A123 最近 30 分钟 GET /chats → 命中 12 条,全部返回空数组
-2. **[bytebase]** SELECT count(*) FROM chat_metadata WHERE uid='A123' → 47 条(数据未丢)
-3. **[memory]** curl /debug?uid=A123 → mempoint 完整
-4. **[代码]** grep GetChatList → chat_service.go:L221 用 character_id 过滤
+1. **[SLS]** 查 uid=A123 最近 30 分钟 `GET /<domain>` → 命中 12 条,全部返回空数组
+2. **[bytebase]** SELECT count(*) FROM `<main_table>` WHERE uid='A123' → 47 条(数据未丢)
+3. **[memory]** curl /debug?uid=A123 → 相关记忆数据完整
+4. **[代码]** grep `<HandlerFunc>` → `<domain>_service.go:L221` 用 primary_key 过滤
 
 </details>
 
@@ -42,17 +42,17 @@
 
 | 证据 | Tag | 内容 | 来源 |
 |---|---|---|---|
-| SLS 日志 | strong_signal | `GET /chats?character_id=X ... status=200 count=0` | project=`<你的 SLS project>`, logstore=chat |
-| DB 记录 | ground_truth | 47 条 chat_metadata,character_id 分布:{"cid_A": 40, "cid_B": 7} | bytebase prod-`<你的库>` |
-| 代码 | ground_truth | `chat_service.go:221` 用 `req.CharacterID` 过滤 metadata (**完整函数已读**) | worktree: `<github_root>/bug-triage-worktrees/<short>/<backend>` |
-| memory | absence_signal (**已排除参数错**: 同 uid 换 cid 对照证实账号可拉非空) | mempoint 完整,数据未丢 | memory 服务 /debug |
+| SLS 日志 | strong_signal | `GET /<domain>?primary_key=X ... status=200 count=0` | project=`<你的 SLS project>`, logstore=`<domain>` |
+| DB 记录 | ground_truth | 47 条 `<main_table>`,primary_key 分布:{"key_A": 40, "key_B": 7} | bytebase prod-`<你的库>` |
+| 代码 | ground_truth | `<domain>_service.go:221` 用 `req.PrimaryKey` 过滤 (**完整函数已读**) | worktree: `<github_root>/bug-triage-worktrees/<short>/<backend>` |
+| memory | absence_signal (**已排除参数错**: 同 uid 换个 <次键> 对照证实账号可拉非空) | 记忆数据完整,数据未丢 | memory 服务 /debug |
 
 </details>
 
 <details>
 <summary>点开查看:对抗式自检 (**mandatory, 缺此段视为不合格报告**)</summary>
 
-**规则来自 2026-07 事故**: 主 agent 6 次翻案都是先给结论后被用户手动打脸。这一段是**给结论前的自我打脸**。不许省略, 不许敷衍。
+**规则来自一次真实事故复盘**: 主 agent 多次翻案都是先给结论后被用户手动打脸。这一段是**给结论前的自我打脸**。不许省略, 不许敷衍。
 
 ### 1. 现有证据里最弱的 3 条是什么?
 
@@ -116,19 +116,19 @@
 
 ### 差异 1:verdict=real_bug + confidence=confirmed
 
-把"建议:先加打点验证"换成"修复建议",**并新增必填 `### 修复与存量状态` 段**(P0 规则,来自 2026-07 pay 事故)。
+把"建议:先加打点验证"换成"修复建议",**并新增必填 `### 修复与存量状态` 段**(P0 规则,来自一次支付相关真实事故复盘)。
 
 ```markdown
 ### 修复建议
 
-- **修复位置**:`chat_service.go:L221`
-- **修复思路**:改用 chat_metadata 里 uid 的所有 character_id 做 OR 过滤,而不是仅用 request.character_id
-- **影响面**:受影响用户估算 ~500 iOS 端切角色用户/天
+- **修复位置**:`<domain>_service.go:L221`
+- **修复思路**:改用 `<main_table>` 里 uid 的所有 primary_key 做 OR 过滤,而不是仅用 `req.PrimaryKey`
+- **影响面**:受影响用户估算 ~500 <端>用户/天
 - **回归风险**:低(只放宽过滤条件,不改数据结构)
 
 ### 修复与存量状态 (**mandatory, 缺此段视为不合格 confirmed 报告**)
 
-**规则来自 2026-07 pay Not Bound 事故**:代码 fix 已合入不代表用户已被补发。confirmed 报告必须回验以下 4 项:
+**规则来自一次支付相关真实事故复盘**:代码 fix 已合入不代表用户已被补发。confirmed 报告必须回验以下 4 项:
 
 1. **修复代码**:
    - Commit hash: `<hash>`
@@ -137,21 +137,21 @@
    - PR: `#XXX`
    - 已部署 prod?**用 SLS 镜像 tag / trace 变化时刻直接印证**(如 image tag 从 `A-xx` 变为 `B-yy` 的第一条日志时间)
 2. **存量补救状态**:
-   - fix 部署至今是否有 `RecoverNow` / backfill / 手动补单等 API 的调用日志?(SLS grep 关键字精确统计次数)
+   - fix 部署至今是否有 `<Recover/Backfill/Retry>` / 手动补救等 API 的调用日志?(SLS grep 关键字精确统计次数)
    - 若 0 次:说明**没做过存量补**,verdict 保持 confirmed 但必须列全量存量清单
 3. **本 uid 现网数据**(报告主 subject uid):
    - 再查一次 bytebase 主表,确认现在还是命中/仍缺失
 4. **存量全量清单**:
-   - 用 SLS pre-fix 期间 bug 触发日志 grep 出所有独立实体键(uid / orig_txn / order_id)
+   - 用 SLS pre-fix 期间 bug 触发日志 grep 出所有独立实体键(uid / <交易键> / order_id 等)
    - 逐个 bytebase 反查 → 输出 "已恢复 N / 未恢复 M" 表,附具体 uid 列表(未恢复的必须列出)
    - 交叉可能有"命中键但归属其他 uid" 的误报,要显式排除
 
 <details>
 <summary>点开查看:验证方式</summary>
 
-- 修复后观察 `chat_list_empty_when_history_exists` 告警消失
-- 抽样 10 个受影响 uid 手动验证聊天列表恢复
-- Logfire 上看 GetChatList 返回空数组的比例应该降到 <1%
+- 修复后观察 `<domain>_list_empty_when_history_exists` 告警消失
+- 抽样 10 个受影响 uid 手动验证结果恢复
+- Logfire 上看 `<HandlerFunc>` 返回空数组的比例应该降到 <1%
 
 </details>
 ```
@@ -176,8 +176,8 @@
 <details>
 <summary>点开查看:我尝试的定位路径</summary>
 
-- 查 SLS 全量搜"聊天丢失" → 命中 4 万条,无法收敛
-- 查代码 GetChatList → 找到但无法对应到具体请求
+- 查 SLS 全量搜"<用户口述关键词>" → 命中数万条,无法收敛
+- 查代码 `<HandlerFunc>` → 找到但无法对应到具体请求
 - 尝试从消息内容抽 uid 关键词 → 无匹配
 
 </details>
@@ -207,11 +207,11 @@
 
 ### 为什么定位后判非 bug
 
-分析后发现是产品预期行为:用户在测试环境切换角色,主动清空过缓存,导致本地缓存和服务端不一致。这是正常的缓存刷新流程。
+分析后发现是产品预期行为:用户在测试环境做了主动清空缓存的操作,导致本地缓存和服务端不一致。这是正常的缓存刷新流程。
 
 ### 建议回复用户
 
-> "感谢反馈。这个是缓存刷新导致的正常现象,重新拉取聊天列表就恢复了。如果生产环境也有类似问题请再告知。"
+> "感谢反馈。这个是缓存刷新导致的正常现象,重新拉取即可恢复。如果生产环境也有类似问题请再告知。"
 
 <details>
 <summary>点开查看:定位过程</summary>

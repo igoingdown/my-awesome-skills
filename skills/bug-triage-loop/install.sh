@@ -111,11 +111,13 @@ cmd_doctor() {
 
   # 3. secrets.sh 相关环境变量 (给 MCP 用)
   echo "-- 3. secrets.sh 环境变量 (MCP 需要, 缺则相关证据源降级)"
+  # 以下环境变量名是作者项目里的例子。如果你的 secrets.sh 用别的名字,
+  # 直接改这个数组即可。变量本身不进 skill 目录,只在这里做 doctor 断言。
   local secret_keys=(
     ALIYUN_SLS_AK_ID
     ALIYUN_SLS_ENDPOINT
     ALIYUN_SLS_PROJECT
-    TIPSY_BYTEBASE_URL
+    BYTEBASE_URL
   )
   for k in "${secret_keys[@]}"; do
     if [[ -n "${!k-}" ]]; then
