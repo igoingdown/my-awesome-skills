@@ -3,19 +3,19 @@
 #   - ~/.agents/skills/   (for OpenClaw)
 #   - ~/.claude/skills/   (for Claude Code)
 #
-# Repo is canonical. Running this script will overwrite any local
-# modifications made directly inside the destination skill dirs.
+# Repo is canonical. This script overwrites any local modifications
+# inside the destination skill dirs.
+#
+# This script is intentionally minimal: it only copies. Per-skill install
+# logic (dependency checks, config bootstrap, uninstall) lives inside each
+# skill's own install.sh — the skill knows how to install itself.
 #
 # Usage:
 #   ./sync.sh                     Sync ALL skills (default)
 #   ./sync.sh <skill-name>        Sync only the specified skill
-#   ./sync.sh --info <skill-name> Print the skill's INSTALL.md, do NOT sync
 #   ./sync.sh --list              List available skills
-#   ./sync.sh --dry-run [<skill>] Show what would happen without touching files
+#   ./sync.sh --dry-run [<skill>] Preview without touching files
 #   ./sync.sh --help              This help
-#
-# For skills that ship an INSTALL.md (tools / credentials / porting notes),
-# single-skill sync will print it after the copy so you don't miss setup steps.
 
 set -euo pipefail
 
@@ -29,14 +29,11 @@ DESTS=(
 
 DRY_RUN=0
 
-# ---------- helpers ----------
-
 usage() {
   cat <<EOF
 Usage:
   $0                        Sync ALL skills (default)
   $0 <skill-name>           Sync only the specified skill
-  $0 --info <skill-name>    Print the skill's INSTALL.md, do NOT sync
   $0 --list                 List available skills
   $0 --dry-run [<skill>]    Preview without touching files
   $0 --help                 This help
@@ -44,7 +41,8 @@ Usage:
 Destinations:
 $(for d in "${DESTS[@]}"; do echo "  - $d"; done)
 
-After sync, restart Claude Code / OpenClaw so newly added skills are discovered.
+Per-skill install / config / doctor: run <skill>/install.sh --help
+(if the skill ships one). This script only copies files.
 EOF
 }
 
@@ -59,30 +57,15 @@ list_skills() {
   require_src
   for d in "$SRC"/*/; do
     [[ -d "$d" ]] || continue
-    local name has_install
+    local name marker
     name="$(basename "$d")"
-    if [[ -f "$d/INSTALL.md" ]]; then
-      has_install=" (has INSTALL.md)"
+    if [[ -x "$d/install.sh" ]]; then
+      marker=" (has install.sh)"
     else
-      has_install=""
+      marker=""
     fi
-    echo "  ${name}${has_install}"
+    echo "  ${name}${marker}"
   done
-}
-
-show_info() {
-  local skill_name="$1"
-  local install_md="$SRC/$skill_name/INSTALL.md"
-  if [[ ! -d "$SRC/$skill_name" ]]; then
-    echo "Error: skill not found: $skill_name" >&2
-    exit 1
-  fi
-  if [[ ! -f "$install_md" ]]; then
-    echo "Error: no INSTALL.md at $install_md" >&2
-    echo "This skill does not ship an install manual. Run './sync.sh $skill_name' to just copy it." >&2
-    exit 1
-  fi
-  cat "$install_md"
 }
 
 copy_one() {
@@ -103,20 +86,25 @@ copy_one() {
       mkdir -p "$dest"
       rm -rf "$target"
       cp -R "$src_dir" "$target"
-      echo "  ✓ $skill_name → $dest/$skill_name"
+      echo "  ✓ $skill_name → $target"
     fi
   done
 }
 
-print_install_if_any() {
+hint_install_if_any() {
   local skill_name="$1"
-  local install_md="$SRC/$skill_name/INSTALL.md"
-  if [[ -f "$install_md" ]]; then
-    echo ""
-    echo "================ INSTALL.md for $skill_name ================"
-    cat "$install_md"
-    echo "============================================================"
+  local src_install="$SRC/$skill_name/install.sh"
+  if [[ ! -x "$src_install" ]]; then
+    return
   fi
+  echo ""
+  echo "Next step for $skill_name (has install.sh):"
+  for dest in "${DESTS[@]}"; do
+    local target_install="$dest/$skill_name/install.sh"
+    echo "  $target_install --help"
+  done
+  echo "Typical: ./install.sh doctor   → run self-check"
+  echo "         ./install.sh init-config → fill required fields interactively"
 }
 
 sync_all() {
@@ -149,12 +137,11 @@ sync_one() {
   echo "Source: $SRC"
   echo ""
   copy_one "$skill_name"
-  print_install_if_any "$skill_name"
+  hint_install_if_any "$skill_name"
 }
 
 # ---------- arg parsing ----------
 
-# Peel --dry-run wherever it sits.
 ARGS=()
 for a in "$@"; do
   if [[ "$a" == "--dry-run" ]]; then
@@ -174,15 +161,6 @@ case "${1:-}" in
     ;;
   --list)
     list_skills
-    ;;
-  --info)
-    if [[ -z "${2:-}" ]]; then
-      echo "Error: --info requires a skill name" >&2
-      echo ""
-      usage
-      exit 1
-    fi
-    show_info "$2"
     ;;
   --*)
     echo "Error: unknown option: $1" >&2
