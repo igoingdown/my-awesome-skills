@@ -214,13 +214,22 @@ configure_mcp() {
   if claude mcp get logfire &>/dev/null; then already=1; fi
 
   if [[ $already -eq 1 && $FORCE_MCP -eq 0 ]]; then
-    success "logfire MCP 已配置，保持原样（要重配加 --force-mcp）"
+    info "已有 logfire MCP 配置，体检连接..."
+    if claude mcp list 2>/dev/null | grep -q "logfire:.*Connected"; then
+      success "logfire MCP 已配置且连接正常，保持原样（要重配加 --force-mcp）"
+    else
+      warn "logfire MCP 已有配置，但连接体检未通过"
+      warn "  常见原因：之前 claude mcp add 时没带 token（显示 Needs authentication），或 token 失效"
+      warn "  带 token 重配：LOGFIRE_READ_TOKEN=pylf_... $0 --mcp-only --force-mcp"
+    fi
     return
   fi
 
   if [[ -z "$TOKEN" ]]; then
     if [[ -t 0 && $DRY_RUN -eq 0 ]]; then
       echo -e "${BLUE}需要 Logfire read token（Logfire → tipsy 项目 → Settings → Read tokens → Create）${NC}"
+      echo -e "${BLUE}忘了之前的 token 存哪？网页上不会再显示完整值，但配过的机器上常有副本，可以扫一下：${NC}"
+      echo -e "${BLUE}  grep -rho 'pylf_[a-zA-Z0-9_]*' ~/.claude.json ~/.cursor/mcp.json ~/.codex/config.toml 2>/dev/null | sort -u${NC}"
       printf "粘贴 read token（输入不回显）: "
       read -rs TOKEN
       echo
@@ -230,6 +239,9 @@ configure_mcp() {
   if [[ -z "$TOKEN" ]]; then
     warn "没有提供 token，跳过 MCP 配置（skill 本体不受影响）"
     warn "  配好 token 后重跑：LOGFIRE_READ_TOKEN=pylf_... $0 --mcp-only"
+    warn "  或走官方 OAuth（有浏览器时）："
+    warn "    claude mcp add --transport http logfire \"$MCP_URL\" -s user"
+    warn "    然后在 Claude Code 里执行 /mcp → logfire → 完成浏览器登录"
     return
   fi
 
@@ -242,7 +254,14 @@ configure_mcp() {
   claude mcp remove logfire &>/dev/null || true
   claude mcp add --transport http logfire "$MCP_URL" \
     --header "Authorization: Bearer $TOKEN" -s user
-  success "logfire MCP 已配置（user scope）"
+
+  info "体检 MCP 连接..."
+  if claude mcp list 2>/dev/null | grep -q "logfire:.*Connected"; then
+    success "logfire MCP 已配置并连接成功（user scope）"
+  else
+    warn "logfire MCP 已写入配置，但连接体检未通过——token 可能无效或已过期"
+    warn "  手动检查：claude mcp list；换 token 重跑：$0 --mcp-only --force-mcp"
+  fi
 }
 
 # ============== 安装主流程 ==============
@@ -266,6 +285,7 @@ do_install() {
   info "后续步骤："
   info "  1. 验证 MCP：claude mcp list  应看到 logfire ... ✓ Connected"
   info "  2. 重启 Claude Code 会话或开新对话，skill 列表应出现 logfire-ops"
+  info "     （MCP 工具在会话启动时加载，已打开的会话不会自动生效）"
   info "  3. 触发示例：「读一下线上告警」/「在 ddd 看板加个 5xx panel」/"
   info "             「这个报错帮我看下根因（trace_id ...）」"
 }
