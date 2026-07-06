@@ -1,0 +1,171 @@
+# prompts/rubric.md
+
+## 5 档实锤 rubric
+
+给一条已判定为 real_bug 的 bug 打分,判断证据链的完整度。
+
+## 输入
+
+- 用户原文
+- 定位阶段收集的证据:SLS 日志片段、DB 查询结果、代码引用、memory 服务返回、bug-analyze 找到的相关 handler 等
+- 每个证据都有 `source`(sls/db/code/memory/user_repro)和 `confidence`(0-1)
+
+## 输出
+
+**只输出 JSON**,字段如下:
+
+```json
+{
+  "verdict": "confirmed" | "likely" | "needs-more-signal" | "insufficient" | "not-bug-after-analysis",
+  "score": 0.0,
+  "reasoning": "3-5 句解释为什么打这个分",
+  "root_cause_hypothesis": "如果 verdict != insufficient,给出根因假设",
+  "fix_suggestion": "confirmed/likely 时给出修复位置 file:line 或简述",
+  "instrumentation_plan": "needs-more-signal 时给出打点方案(见格式)",
+  "not_bug_reason": "not-bug-after-analysis 时说明为什么"
+}
+```
+
+## 各档定义
+
+### confirmed (score >= 0.85)
+
+**触发条件(**全部**满足,来自 2026-07 pay Not Bound 事故复盘,严于旧版)**:
+
+- **三方 ground_truth 齐备**(三方缺一不可):
+  1. ≥1 条 ground_truth 来自**现网数据**(bytebase / DMS 主表 SELECT 命中或未命中、Lindorm COUNT、精确 uid+trace 的生产 SLS 命中)
+  2. ≥1 条 ground_truth 来自**代码**(完整函数体已读,`Read` 过从 func 签名到闭合 `}`,不是 grep 一行)
+  3. ≥1 条 ground_truth 来自**修复线索**(修复 commit / PR / 已存在的 workaround / backfill 接口的实际代码位置)
+- **三方数值 / 时间戳 / uid 一致**:不能一方说"用户 06-27 触发",另一方说"07-04",第三方对不上;必须能拿三个 timestamp 或三个 uid/orig_txn 摆一起彼此印证
+- 主假设 = 三方交集能推出的唯一结论,不是多方候选
+
+**输出必须包含**:
+
+- 具体根因(引用到 `file:line` + 具体判据/字段/值)
+- 修复位置或已修复 commit hash(若已修)
+- 影响面(受影响用户估算,尽可能给全量清单,不能只给"至少 10+")
+- **存量 handoff 状态**(参考 SKILL.md Step 12.5):owner / 私信草稿路径 / 已恢复 vs 未恢复的清单
+
+**反例(2026-07 pay 事故)**:
+
+- 只有代码 + SLS 的 confirmed 报告是**不够的**,必须再拿 bytebase 主表行(存量是否已入库)作为第 3 方交叉,不然会把"已修但存量未补"误判为 "confirmed 全解决"。
+- "现网 SLS 精确命中 + 代码 diff 已读" 是必要不充分,还需要"修复 commit 的具体位置"这一方。
+
+### likely (score 0.65 - 0.85)
+
+**触发条件**:
+- 两方证据一致(如 SLS + 代码,或 DB + 代码)
+- 缺失一方(通常是关键 span 没打点导致 SLS 无信号,或 memory 服务无相应 API)
+- 根因是**高置信度假设**,但没直接日志锁定
+
+**输出必须包含**:
+- 主假设(标 "假设")
+- 支持证据 + 缺失证据
+- 若有可能:验证方案(如"发一次请求带 debug header 观察 X")
+
+### needs-more-signal (score 0.35 - 0.65)
+
+**触发条件**:
+- 证据分散指向多个可能
+- 关键路径没有 span/log,无法判断
+- DB 状态正常但接口返回异常(典型:"过滤条件"类问题)
+
+**输出必须包含 instrumentation_plan**,格式如下:
+
+```json
+{
+  "instrumentation_plan": {
+    "spans": [
+      {
+        "file": "internal/chat/chat_service.go",
+        "line": 221,
+        "function": "GetChatList",
+        "span_name": "get_chat_list",
+        "fields": [
+          {"name": "uid", "type": "string"},
+          {"name": "requested_character_id", "type": "string"},
+          {"name": "matched_count", "type": "int"},
+          {"name": "filter_applied", "type": "string"}
+        ],
+        "expected_signal": "matched_count=0 且 filter_applied 显示 filter 条件"
+      }
+    ],
+    "alerts": [
+      {
+        "name": "chat_list_empty_return",
+        "condition": "matched_count=0 for GetChatList > 100/5min",
+        "channel": "飞书 SRE 群"
+      }
+    ],
+    "observation_window": "3-7 天",
+    "success_criteria": "从新增 span 里能读出 filter 条件与预期不匹配的记录"
+  }
+}
+```
+
+### insufficient (score < 0.35)
+
+**触发条件**:
+- 无法定位到任何具体模块
+- 用户描述过于笼统("有 bug"、"炸了")且无 uid/时间/端信息
+- 没有任何日志/代码/DB 证据支撑
+
+**输出必须包含**:
+- 需要用户补充的信息清单(uid? 时间? 端? 操作步骤?)
+- 已尝试的定位方向 + 为什么走不通
+
+### not-bug-after-analysis
+
+**触发条件(定位后才发现)**:
+- 分析后发现是产品预期行为(用户误以为是 bug)
+- 是用户操作错误(如"没充值就用付费功能")
+- 是环境问题(测试环境 vs 线上环境搞混)
+
+**输出必须包含**:
+- 为什么定位后判非 bug
+- 建议的回复用户话术(可选)
+
+## 证据分级 (**打分前必须先分级, 每一条证据都要标 tag**)
+
+**背景**: 本节的存在是因为一次真实事故 (2026-07 reset OC 事故): AI 因把"SLS 0 命中"和"接口返回空"当硬证据, 6 次翻案。规则如下:
+
+| Tag | 说明 | 单条最高贡献 | Confirmed 是否可只靠这类 |
+|---|---|---:|---|
+| `ground_truth` | DB 直查行/行数、Postgres SELECT、Lindorm COUNT、生产 SLS 明确命中的 uid+cid trace、代码 grep 到具体行 (**签名+return 都读了**) | 0.40 | **必须**至少 1 条 |
+| `strong_signal` | SLS 有精确关键字 + uid 命中、Grafana 指标异常时段吻合投诉、trace_id 完整链路吻合 | 0.25 | 单靠不行 |
+| `absence_signal` | SLS 关键字 0 命中、接口返回空、grep 不到某函数、DB 查无该行 | **0.15 上限, 且必须先验索引/参数无误** | **单靠绝对不行** |
+| `inference` | 沿代码链推理"这里应该走那条分支"、"若命中该 case 则..."、按 llmdoc 记忆推 | 0.10 | 单靠不行 |
+| `hypothesis` | 用户口述/截图 OCR 未验证部分、"根据经验判断" | 0.05 | 单靠不行 |
+
+### 硬规则
+
+- **`confirmed` 必须至少有 1 条 `ground_truth`** (无一条 = 直接降到 likely 上限)
+- **`absence_signal` 使用前必须先排除**: (a) 索引/关键字覆盖 (b) 参数错 (c) 时区/单位错 (d) 权限被静默过滤。任一未排除, tag 降为 `hypothesis`
+- **同类证据 saturating**: 3 条 `absence_signal` 加起来最多 0.30, 不线性累加
+- **每份报告必须列出所用证据的 tag 表**, 不许口头"多方证据"
+
+## 证据链权重(打分时参考)
+
+**已被"证据分级"章节 override**。旧权重表保留仅供历史对比, 不再使用:
+
+| 证据源 | 旧权重 | 备注 |
+|---|---|---|
+| SLS 日志(生产) | 0.35 | 有具体报错/异常路径 |
+| 代码定位(bug-analyze) | 0.30 | 能指到 file:line 的逻辑问题 |
+| DB/ES 数据 | 0.15 | 状态与描述一致 |
+| memory 服务 | 0.10 | 记忆相关 bug 必查 |
+| 用户可复现 | 0.05 | 用户能给复现步骤 |
+| Logfire/SigNoz trace | 0.05 | 有完整调用链 |
+
+**打分方法(现行)**: 按证据分级 tag 逐条评分, 累加时同类 saturating。若累加超 0.85 但缺 ground_truth, 强制封顶到 likely。
+
+若 score 边界模糊(如 0.63 vs 0.67),偏保守往低档报。宁可 needs-more-signal 让用户 review,不要 likely 让用户误判。
+
+## 常见反例(避免误判)
+
+- ❌ 用户说"聊天丢了"→ 直接判 confirmed"聊天数据丢失"。**正确**:先查 DB,若 DB 有 → 不是丢了,是查询侧问题,判 needs-more-signal
+- ❌ SLS 里搜到 500 → 判 confirmed。**正确**:500 可能是下游依赖挂了,不是这个 bug 的直接原因,除非能对应到用户复现的时间点
+- ❌ bug-analyze 找到一段"可能相关"的代码 → 判 likely。**正确**:除非能对应到用户描述的现象,否则算 needs-more-signal
+- ❌ 用户能复现 → 加分。**正确**:用户能复现不代表你能定位,权重只有 0.05
+- ❌ **"SLS 全局 0 命中该关键字, 因此该接口未被调用"** → 判 confirmed 不 bug。**正确**: 0 命中前必须先做**全局命中数 sanity check** (不带 uid 过滤看关键字本身有没有索引); 全局都 0 意味着 SLS 索引不含或日志未落该 logstore, 不能推"没调用"。**这个规则来自 2026-07 事故**
+- ❌ **"接口返回空数组, 因此后端已清"** → 判 confirmed 不 bug。**正确**: 空可能来自参数错 (查错 session_id / 单位错 / 时区错) / 权限静默过滤 / 数据在别的分片。必须做**同 uid 换个 cid 的对照实验**, 证明账号能拉到别的非空数据, 才算证据。**这个规则来自 2026-07 事故**

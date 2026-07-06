@@ -1,0 +1,7 @@
+*.bak
+*.tmp
+.DS_Store
+
+# state/ 提交到 git(便于回溯)
+# 若想不提交,取消下一行注释
+# state/
