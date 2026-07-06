@@ -24,7 +24,8 @@ cd skills/logfire-ops
 1. 把 skill 复制到 `~/.claude/skills/logfire-ops/`（全局，所有项目可用）。
 2. 配置 `logfire` MCP server（HTTP transport + 你的 read token，user scope）。
 
-> 如果你**已经**配过 logfire MCP，脚本会自动跳过这步、不需要 token。
+> 如果你**已经**配过 logfire MCP 且连接正常，脚本会自动跳过这步、不需要 token。
+> 配置存在但连不上（比如之前 add 时没带 token），脚本会提示你加 `--force-mcp` 重配。
 > 没配过的话，会提示你粘贴 read token（输入不回显）。
 
 ### Read token 怎么拿
@@ -62,6 +63,65 @@ claude mcp list   # 应看到：logfire ... ✓ Connected
 - 「每 10 分钟巡检一下生产有没有新 5xx」
 - 「这个报错帮我看下根因」（给 trace_id / project_id）
 - 「这个 bug 一天就几次，值得修吗」
+
+## 常见问题（踩坑实录）
+
+以下都是真实安装中遇到过的问题与解法。
+
+### 1. 用 `sync.sh` 装完 skill，MCP 没配上
+
+**症状**：skill 列表里有 `logfire-ops`，但 `claude mcp list` 里没有 `logfire`，skill 跑起来说连不上 MCP。
+
+**原因**：`sync.sh` 只拷贝 skill 文件、不配 MCP，而且以前同步完什么提示都没有。
+
+**解法**：补跑一次 `./install.sh --mcp-only`。（现在 `sync.sh` 同步后会自动体检 logfire MCP，缺配置会打印接法指引。）
+
+### 2. 已有一条无 token 的 logfire MCP 配置，重跑 install.sh 不生效
+
+**症状**：`claude mcp list` 显示 `logfire ... ! Needs authentication`；重跑 `install.sh` 却输出「logfire MCP 已配置，保持原样」。
+
+**原因**：脚本默认不动已有配置（怕覆盖你手动配好的），哪怕它没带 token。
+
+**解法**：加 `--force-mcp` 强制重配：
+
+```bash
+LOGFIRE_READ_TOKEN=pylf_... ./install.sh --mcp-only --force-mcp
+```
+
+### 3. 忘了 read token 存在哪，不想再新建一个
+
+Logfire 网页上 token **创建后就不再显示完整值**（Settings → Read tokens 里只有前缀），但配置过的机器上通常留有副本。token 都以 `pylf_` 开头，一条命令扫常见位置：
+
+```bash
+grep -rho 'pylf_[a-zA-Z0-9_]*' \
+  ~/.claude.json ~/.logfire/ ~/.cursor/mcp.json ~/.codex/config.toml \
+  ~/.zshrc ~/.zshenv ~/.zprofile ~/.bash_profile 2>/dev/null | sort -u
+```
+
+| 位置 | 说明 |
+|---|---|
+| `~/.claude.json` | Claude Code 的 MCP 配置（本脚本写入的就是这里），token 在 `mcpServers.logfire` 的 Authorization header 里 |
+| `~/.cursor/mcp.json`、`~/.codex/config.toml` | 给 Cursor / Codex 配过 logfire MCP 的话 |
+| `~/.logfire/default.toml` | `logfire auth` 的登录凭据（**不是** read token） |
+| 项目下 `.logfire/logfire_credentials.json` | write token（**不是** read token） |
+
+> MCP 需要的是 **read token**（`pylf_v2_us_...`）。从 `~/.claude.json` / `~/.cursor/mcp.json` 里翻出来的就是它，跨机器可复用。
+
+### 4. SSH 到服务器上装，浏览器 OAuth 走不通
+
+官方文档对 Claude Code 的首选方式是 `claude mcp add --transport http logfire <url>`，然后在会话里用 `/mcp` 走浏览器 OAuth。但 OAuth 回调打到 localhost，**SSH 远程会话（没配端口转发）走不通**。
+
+**解法**：无头/远程环境直接用 read token（Bearer header）——也就是本脚本的默认方式。
+
+### 5. MCP 配好了，当前已打开的 Claude Code 会话里还是用不了
+
+MCP 工具在**会话启动时**加载，配置完成不会注入已经打开的会话。
+
+**解法**：重开会话（或 `claude --resume <会话ID>` 回到原会话），再用 `claude mcp list` 确认 `✓ Connected`。
+
+### 6. 要不要用官方本地的 logfire-mcp 包？
+
+不要。它已废弃（GitHub 仓库归档、STDIO 包不再更新），官方现在只推荐 hosted 远程 MCP：`https://logfire-us.pydantic.dev/mcp`（EU 区换 `logfire-eu`）。本 skill 用的就是 hosted 方式，不需要装任何本地包。
 
 ## 能力一览
 
