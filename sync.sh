@@ -42,3 +42,17 @@ echo "Done."
 echo ""
 echo "Note: Claude Code loads skills at session start. Restart Claude Code"
 echo "to make newly added skills discoverable."
+
+# logfire-ops depends on the logfire MCP server, which this script does NOT
+# configure (it only copies files). Health-check it and print setup hints.
+if [[ -d "$SRC/logfire-ops" ]] && command -v claude &>/dev/null; then
+  if ! claude mcp get logfire &>/dev/null; then
+    echo ""
+    echo "⚠ logfire-ops requires the logfire MCP server, which is not configured yet."
+    echo "  Option A (browser OAuth):"
+    echo "    claude mcp add --transport http logfire https://logfire-us.pydantic.dev/mcp -s user"
+    echo "    then run /mcp inside Claude Code and authenticate with your Logfire account."
+    echo "  Option B (headless, read token):"
+    echo "    LOGFIRE_READ_TOKEN=pylf_... $SRC/logfire-ops/install.sh --mcp-only"
+  fi
+fi
