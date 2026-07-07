@@ -83,6 +83,6 @@ curl -sf "$GRAFANA_URL/api/datasources/proxy/uid/<uid>/api/v1/query" \
 | 服务 | 看板 uid | folder | 指标前缀 | 看板 JSON 所在仓库 |
 |---|---|---|---|---|
 | tipsy-backend | (多块,见 tipsy-backend 仓) | Tipsy Backend | `tipsy_*` / `gin_*` | tipsy-backend `deploy/grafana/dashboards/` |
-| tipsy-memory | `tipsy-memory` | memory-service | `tipsy_memory_*` | tipsy-memory-demo `deploy/observability/grafana-dashboard.json` |
+| tipsy-memory | `tipsy-memory` | memory-service | `tipsy_memory_*` | 本地 `~/grafana-dashboards/tipsy-memory.json`(线上 v2 存档;仓库 `deploy/observability/grafana-dashboard.json` 是 v1,未跟进图例规范) |
 
 改完务必 `git diff` 审查再提交。
