@@ -64,13 +64,13 @@ macOS 上通过 IPP 协议直连办公室网络打印机打印 PDF，并在**打
 
 ### Volcengine Balance Check
 
-查询火山引擎账户消费信息（余额/账单），凭证走环境变量。
+查询火山引擎账户消费信息（余额/账单），凭证走 `~/github/my_dot_files/secrets.sh`（不进仓库）。
 
 使用说明：[skills/volcengine-balance-check/SKILL.md](skills/volcengine-balance-check/SKILL.md)
 
 ### Vultr Balance Check
 
-查询 Vultr 账户余额和当月待扣费用，凭证走 `.env`（不进仓库）。
+查询 Vultr 账户余额和当月待扣费用，凭证走 `~/github/my_dot_files/secrets.sh`（不进仓库）。
 
 使用说明：[skills/vultr-balance-check/SKILL.md](skills/vultr-balance-check/SKILL.md)
 
@@ -104,8 +104,7 @@ macOS 上通过 IPP 协议直连办公室网络打印机打印 PDF，并在**打
 ```bash
 cd skills/family-travel-planner
 npm install && npm run build
-cp .env.example .env
-# 编辑 .env，填入 GaoDe API Key
+# GaoDe API Key 加进 ~/github/my_dot_files/secrets.sh（参考 secrets.example.sh）
 npm start -- --origin 北京 --destination 大连 --days 5 --holiday 五一
 ```
 

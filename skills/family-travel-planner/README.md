@@ -12,9 +12,9 @@ npm install
 # 2. 编译 TypeScript
 npm run build
 
-# 3. 配置 API Key
-cp .env.example .env
-# 编辑 .env，填入 GAODE_API_KEY
+# 3. 配置 API Key（统一放 secrets.sh，不进仓库）
+# 在 ~/github/my_dot_files/secrets.sh 中加入（参考 secrets.example.sh）：
+export GAODE_API_KEY="你的Key"
 
 # 4. 执行
 npm start -- --origin 北京 --destination 大连 --days 5 --holiday 五一
@@ -83,12 +83,10 @@ function haversineDistance(p1: {lat: number, lng: number}, p2: {lat: number, lng
 # 复制到全局 Skills 目录
 cp -r skills/family-travel-planner ~/.agents/skills/
 
-# 在 .env 中配置 API Key
-cd ~/.agents/skills/family-travel-planner
-cp .env.example .env
-# 编辑 .env
+# 配置 API Key：加进 ~/github/my_dot_files/secrets.sh（参考 secrets.example.sh）
 
 # 编译
+cd ~/.agents/skills/family-travel-planner
 npm install && npm run build
 
 # 验证

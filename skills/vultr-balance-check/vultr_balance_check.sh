@@ -4,32 +4,19 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# ==================== 加载 .env 文件 ====================
-ENV_FILE="$SCRIPT_DIR/.env"
-
-if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ Error: .env file not found at $ENV_FILE"
-    echo "Please copy .env.example to .env and fill in your credentials"
-    exit 1
+# ==================== 凭证：统一走 secrets.sh ====================
+# 环境变量已设置则直接用；否则从个人凭证文件注入（不进任何版本库）。
+SECRETS="${SECRETS_FILE:-$HOME/github/my_dot_files/secrets.sh}"
+if [ -z "${VULTR_API_KEY:-}" ] && [ -f "$SECRETS" ]; then
+    # shellcheck disable=SC1090
+    source "$SECRETS"
 fi
-
-# 读取 .env 文件中的变量
-while IFS='=' read -r key value; do
-    # 跳过空行和注释
-    if [[ -n "$key" && ! "$key" =~ ^[[:space:]]*# ]]; then
-        # 去除前后空格和引号
-        key=$(echo "$key" | xargs)
-        value=$(echo "$value" | xargs | sed 's/^["'\'']*//;s/["'\'']*$//')
-        export "$key"="$value"
-    fi
-done < "$ENV_FILE"
-# =========================================================
+# ==================================================================
 
 # 检查必需的环境变量
-if [ -z "$VULTR_API_KEY" ]; then
-    echo "❌ Error: VULTR_API_KEY is not set in .env"
+if [ -z "${VULTR_API_KEY:-}" ]; then
+    echo "❌ Error: VULTR_API_KEY is not set"
+    echo "请在 $SECRETS 中加入：export VULTR_API_KEY=\"...\"（参考 secrets.example.sh）"
     exit 1
 fi
 
@@ -89,14 +76,14 @@ LOG_FILE="$WORKSPACE/vultr_balance.log"
 echo "$MESSAGE" >> "$LOG_FILE"
 echo "✅ 已记录到日志: $LOG_FILE"
 
-# 通过飞书发送消息（如果配置了）
+# 通过飞书发送消息（如果配置了）：优先 openclaw，缺失则回退 lark-cli
 if [ -n "$FEISHU_RECEIVER_ID" ]; then
-    # 动态获取 openclaw 路径
     OPENCLAW_PATH=$(which openclaw 2>/dev/null || echo "")
+    LARK_PATH="${LARK_CLI:-$(which lark-cli 2>/dev/null || echo "")}"
 
     if [ -n "$OPENCLAW_PATH" ]; then
         echo ""
-        echo "📤 正在通过飞书发送消息..."
+        echo "📤 正在通过飞书发送消息（openclaw）..."
         "$OPENCLAW_PATH" message send \
             --channel feishu \
             --target "$FEISHU_RECEIVER_ID" \
@@ -107,8 +94,16 @@ if [ -n "$FEISHU_RECEIVER_ID" ]; then
         else
             echo "⚠️  飞书消息发送失败"
         fi
+    elif [ -n "$LARK_PATH" ]; then
+        echo ""
+        echo "📤 正在通过飞书发送消息（lark-cli）..."
+        if "$LARK_PATH" im +messages-send --user-id "$FEISHU_RECEIVER_ID" --as user --text "$MESSAGE" >/dev/null 2>&1; then
+            echo "✅ 飞书消息发送成功！"
+        else
+            echo "⚠️  飞书消息发送失败（lark-cli token 可能需重新授权：lark-cli auth login）"
+        fi
     else
         echo ""
-        echo "⚠️  未找到 openclaw 命令，跳过飞书消息发送"
+        echo "⚠️  未找到 openclaw / lark-cli 命令，跳过飞书消息发送"
     fi
 fi

@@ -2,8 +2,10 @@
 // Family Travel Planner - Main Entry
 // ============================================================
 
-import { readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { homedir } from 'os';
+import { execFileSync } from 'child_process';
 import { GaodeAPI } from './gaode';
 import { formatTravelPlanMarkdown } from './formatter';
 import {
@@ -68,27 +70,26 @@ function getApiKey(): string {
   // 1. 从环境变量读取
   let apiKey = process.env.GAODE_API_KEY;
 
-  // 2. 从 .env 文件读取
-  if (!apiKey) {
+  // 2. 从 secrets.sh 读取（统一凭证文件，不进任何版本库）
+  const secretsPath =
+    process.env.SECRETS_FILE || resolve(homedir(), 'github/my_dot_files/secrets.sh');
+  if (!apiKey && existsSync(secretsPath)) {
     try {
-      const envPath = resolve(__dirname, '..', '.env');
-      const envContent = readFileSync(envPath, 'utf-8');
-      const match = envContent.match(/GAODE_API_KEY\s*=\s*(.+)/);
-      if (match) {
-        apiKey = match[1].trim().replace(/^["']|["']$/g, '');
-      }
+      apiKey = execFileSync(
+        'bash',
+        ['-c', 'source "$1" >/dev/null 2>&1; printf "%s" "${GAODE_API_KEY:-}"', '_', secretsPath],
+        { encoding: 'utf-8' }
+      ).trim();
     } catch {
-      // .env 文件不存在
+      // source 失败按未配置处理
     }
   }
 
   if (!apiKey || apiKey === 'your_api_key_here') {
     console.error('错误：未配置高德地图 API Key');
     console.error('');
-    console.error('请执行以下步骤：');
-    console.error('1. cp .env.example .env');
-    console.error('2. 编辑 .env 文件，填入你的 GAODE_API_KEY');
-    console.error('3. 重新运行此脚本');
+    console.error(`请在 ${secretsPath} 中加入：`);
+    console.error('export GAODE_API_KEY="你的Key"');
     console.error('');
     console.error('API Key 申请地址：https://lbs.amap.com/dev/key/app');
     process.exit(1);

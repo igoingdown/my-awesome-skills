@@ -1,6 +1,42 @@
 import fetch from 'node-fetch';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+import { homedir } from 'os';
+import { execFileSync } from 'child_process';
 
 // --- Configuration ---
+
+// 凭证统一走 secrets.sh（个人凭证文件，不进任何版本库）：
+// 环境变量已设置则直接用，否则 source secrets.sh 后取回所需变量。
+const SECRETS_KEYS = [
+  'OPENROUTER_API_KEY',
+  'FEISHU_APP_ID',
+  'FEISHU_APP_SECRET',
+  'FEISHU_RECEIVER_OPEN_ID',
+] as const;
+
+function loadSecrets(): void {
+  if (SECRETS_KEYS.every((key) => process.env[key])) return;
+  const secretsPath =
+    process.env.SECRETS_FILE || resolve(homedir(), 'github/my_dot_files/secrets.sh');
+  if (!existsSync(secretsPath)) return;
+  const printer = SECRETS_KEYS.map((key) => `printf "%s\\0" "\${${key}:-}"`).join('; ');
+  try {
+    const output = execFileSync(
+      'bash',
+      ['-c', `source "$1" >/dev/null 2>&1; ${printer}`, '_', secretsPath],
+      { encoding: 'utf-8' },
+    );
+    const values = output.split('\0');
+    SECRETS_KEYS.forEach((key, i) => {
+      if (values[i] && !process.env[key]) process.env[key] = values[i];
+    });
+  } catch {
+    // source 失败按未配置处理
+  }
+}
+
+loadSecrets();
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID;
@@ -205,6 +241,7 @@ async function sendFeishuMessage(
 async function main(): Promise<void> {
   if (!OPENROUTER_API_KEY) {
     console.error('Error: OPENROUTER_API_KEY is not set');
+    console.error('请在 ~/github/my_dot_files/secrets.sh 中加入：export OPENROUTER_API_KEY="..."');
     process.exit(1);
   }
 

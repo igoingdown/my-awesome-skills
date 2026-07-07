@@ -25,20 +25,19 @@ allowed-tools: Bash, Read, Write
 - **方案对比**：6维度对比自驾 vs 火车
 - **避峰评估**：拥堵降低X% ±15%
 
-## 环境变量
+## 环境变量（统一放 secrets.sh，敏感信息不进仓库）
 
-在调用此脚本前，需配置以下环境变量：
+脚本启动时若环境变量未设置，会 source `~/github/my_dot_files/secrets.sh`（可用 `SECRETS_FILE` 改路径）。需包含：
 
 - `GAODE_API_KEY`: 高德地图 Web服务 API Key
 
 ### API Key 配置
 
-1. 复制 `.env.example` 为 `.env`：
-   ```bash
-   cp .env.example .env
-   ```
-2. 编辑 `.env` 文件，填入你的 API Key
-3. 确保 `.env` 已加入 `.gitignore`
+把下面一行加进 `~/github/my_dot_files/secrets.sh`（参考 `secrets.example.sh`）：
+
+```bash
+export GAODE_API_KEY="你的Key"
+```
 
 ### 高德 API Key 申请流程
 

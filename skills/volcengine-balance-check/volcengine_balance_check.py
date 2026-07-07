@@ -6,8 +6,9 @@
 依赖安装：
     bash install.sh
 
-环境变量配置：
-    复制 .env.example 为 .env 并填入真实密钥
+凭证配置（统一走 secrets.sh，不进任何版本库）：
+    在 ~/github/my_dot_files/secrets.sh 中 export VOLC_ACCESS_KEY / VOLC_SECRET_KEY
+    可用环境变量 SECRETS_FILE 改路径
 """
 
 import sys
@@ -16,27 +17,30 @@ import json
 import subprocess
 from datetime import datetime
 
-# ==================== 加载 .env 文件 ====================
-def load_env_file():
-    """从脚本同目录加载 .env 文件"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    env_file = os.path.join(script_dir, '.env')
+# ==================== 凭证：统一走 secrets.sh ====================
+def load_secrets():
+    """环境变量已设置则直接用；否则用 bash source secrets.sh 后取回所需变量"""
+    if os.environ.get('VOLC_ACCESS_KEY') and os.environ.get('VOLC_SECRET_KEY'):
+        return
+    secrets = os.environ.get('SECRETS_FILE') or os.path.expanduser(
+        '~/github/my_dot_files/secrets.sh')
+    if not os.path.exists(secrets):
+        return
+    wanted = ['VOLC_ACCESS_KEY', 'VOLC_SECRET_KEY', 'VOLC_REGION',
+              'VOLC_WORKSPACE_PATH', 'FEISHU_RECEIVER_ID']
+    printer = ''.join(f'printf "%s\\0" "${{{k}:-}}"; ' for k in wanted)
+    result = subprocess.run(
+        ['bash', '-c', f'source "$1" >/dev/null 2>&1; {printer}', '_', secrets],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        return
+    values = result.stdout.split('\0')
+    for key, value in zip(wanted, values):
+        if value and not os.environ.get(key):
+            os.environ[key] = value
 
-    if not os.path.exists(env_file):
-        print(f"❌ Error: .env file not found at {env_file}")
-        print("Please copy .env.example to .env and fill in your credentials")
-        sys.exit(1)
-
-    with open(env_file, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip()
-
-load_env_file()
-# =========================================================
+load_secrets()
+# =================================================================
 
 # 检查环境变量
 VOLC_ACCESS_KEY = os.environ.get('VOLC_ACCESS_KEY')
@@ -46,7 +50,10 @@ WORKSPACE = os.path.expanduser(os.environ.get('VOLC_WORKSPACE_PATH', '~/.opencla
 FEISHU_RECEIVER_ID = os.environ.get('FEISHU_RECEIVER_ID')
 
 if not VOLC_ACCESS_KEY or not VOLC_SECRET_KEY:
-    print("❌ Error: VOLC_ACCESS_KEY and VOLC_SECRET_KEY must be set in .env")
+    secrets = os.environ.get('SECRETS_FILE') or os.path.expanduser(
+        '~/github/my_dot_files/secrets.sh')
+    print("❌ Error: VOLC_ACCESS_KEY and VOLC_SECRET_KEY must be set")
+    print(f"请在 {secrets} 中加入：export VOLC_ACCESS_KEY=... / export VOLC_SECRET_KEY=...")
     sys.exit(1)
 
 # 添加 venv 中的包路径
@@ -149,6 +156,17 @@ def get_openclaw_path():
     return None
 
 
+def get_lark_cli_path():
+    """动态获取 lark-cli 命令路径（可用环境变量 LARK_CLI 覆盖）"""
+    lark = os.environ.get('LARK_CLI')
+    if lark and os.path.exists(lark):
+        return lark
+    result = subprocess.run(['which', 'lark-cli'], capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+
 def main():
     """主函数"""
     print("=" * 80)
@@ -193,10 +211,11 @@ def main():
     except Exception as e:
         print(f"\n⚠️  记录日志失败: {e}")
 
-    # 通过飞书发送消息
+    # 通过飞书发送消息：优先 openclaw，缺失则回退 lark-cli
     openclaw_path = get_openclaw_path()
+    lark_path = get_lark_cli_path()
     if openclaw_path and FEISHU_RECEIVER_ID:
-        print("\n📤 正在通过飞书发送消息...")
+        print("\n📤 正在通过飞书发送消息（openclaw）...")
         try:
             result = subprocess.run([
                 openclaw_path,
@@ -212,10 +231,27 @@ def main():
                 print(f"⚠️  飞书消息发送失败: {result.stderr}")
         except Exception as e:
             print(f"⚠️  发送飞书消息时出错: {e}")
-    elif not openclaw_path:
-        print("\n⚠️  未找到 openclaw 命令，跳过飞书消息发送")
+    elif lark_path and FEISHU_RECEIVER_ID:
+        print("\n📤 正在通过飞书发送消息（lark-cli）...")
+        try:
+            result = subprocess.run([
+                lark_path,
+                "im", "+messages-send",
+                "--user-id", FEISHU_RECEIVER_ID,
+                "--as", "user",
+                "--text", message
+            ], capture_output=True, text=True, timeout=30)
+
+            if result.returncode == 0:
+                print("✅ 飞书消息发送成功！")
+            else:
+                print(f"⚠️  飞书消息发送失败（lark-cli token 可能需重新授权：lark-cli auth login）: {result.stderr}")
+        except Exception as e:
+            print(f"⚠️  发送飞书消息时出错: {e}")
     elif not FEISHU_RECEIVER_ID:
         print("\n⚠️  FEISHU_RECEIVER_ID 未配置，跳过飞书消息发送")
+    else:
+        print("\n⚠️  未找到 openclaw / lark-cli 命令，跳过飞书消息发送")
 
     return 0
 
