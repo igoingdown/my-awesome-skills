@@ -7,10 +7,11 @@
    bash install.sh
    ```
 
-2. **配置密钥**
+2. **配置密钥**（统一放 secrets.sh，不进仓库）
    ```bash
-   cp .env.example .env
-   # 编辑 .env，填入你的火山引擎 Access Key 和 Secret Key
+   # 在 ~/github/my_dot_files/secrets.sh 中加入（参考 secrets.example.sh）：
+   export VOLC_ACCESS_KEY="..."
+   export VOLC_SECRET_KEY="..."
    ```
 
 3. **获取密钥**
@@ -24,6 +25,8 @@
    ```
 
 ## 环境变量说明
+
+脚本启动时若环境变量未设置，会 source `~/github/my_dot_files/secrets.sh`（可用 `SECRETS_FILE` 改路径）。
 
 | 变量名 | 必填 | 说明 |
 |--------|------|------|
@@ -42,4 +45,4 @@ pip install volcengine
 ```
 
 ### API 调用失败
-检查 `.env` 中的 Access Key 和 Secret Key 是否正确。
+检查 `~/github/my_dot_files/secrets.sh` 中的 Access Key 和 Secret Key 是否正确。

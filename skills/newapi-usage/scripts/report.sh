@@ -19,8 +19,9 @@ SECRETS="${NEWAPI_SECRETS_FILE:-$HOME/github/my_dot_files/secrets.sh}"
 : "${NEWAPI_REPORT_RECEIVER:?缺少 NEWAPI_REPORT_RECEIVER，请在 secrets.sh 中配置}"
 QUOTA_PER_UNIT="${NEWAPI_QUOTA_PER_UNIT:-500000}"
 
-# lark-cli 是 node 程序：优先 PATH，找不到则回退 nvm 常用路径
-export PATH="$HOME/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+# lark-cli 是 node 程序：优先 PATH；再补几个常见安装位置（macOS nvm/homebrew、Linux linuxbrew）。
+# ⚠️ 只追加不覆盖——覆盖会把 Linux 上 node/lark-cli 所在目录冲掉。
+export PATH="$PATH:$HOME/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin"
 LARK="${LARK_CLI:-$(command -v lark-cli || true)}"
 if [ -z "$LARK" ] || [ ! -x "$LARK" ]; then
   echo "找不到 lark-cli，请安装或在 secrets.sh 中 export LARK_CLI=/path/to/lark-cli" >&2

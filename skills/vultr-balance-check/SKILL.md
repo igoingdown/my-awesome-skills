@@ -8,7 +8,7 @@ description: 查询 Vultr 账户余额和当月待扣费用。使用时：用户
 ## 快速开始
 
 1. 安装依赖：`bash install.sh`
-2. 配置密钥：`cp .env.example .env`，编辑 `.env` 填入 Vultr API Key
+2. 配置密钥：把 Vultr API Key 加进 `~/github/my_dot_files/secrets.sh`（参考 `secrets.example.sh`）
 3. 测试运行：`bash vultr_balance_check.sh`
 
 ## 功能
@@ -18,9 +18,9 @@ description: 查询 Vultr 账户余额和当月待扣费用。使用时：用户
 - 记录到日志文件（`~/.openclaw/workspace/vultr_balance.log`）
 - 可选：通过飞书发送消息
 
-## 环境变量
+## 环境变量（统一放 secrets.sh，敏感信息不进仓库）
 
-在 `.env` 文件中配置：
+脚本启动时若环境变量未设置，会 source `~/github/my_dot_files/secrets.sh`（可用 `SECRETS_FILE` 改路径）。需包含：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -28,7 +28,7 @@ description: 查询 Vultr 账户余额和当月待扣费用。使用时：用户
 | `VULTR_WORKSPACE_PATH` | 否 | 日志输出路径，默认 `~/.openclaw/workspace` |
 | `FEISHU_RECEIVER_ID` | 否 | 飞书接收者 ID |
 
-完整配置参考 `.env.example`。
+完整配置参考 `secrets.example.sh`。
 
 ## 获取 API Key
 
