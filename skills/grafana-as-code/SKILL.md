@@ -42,7 +42,7 @@ skill;若指应用层 telemetry 告警,那属于 logfire-ops。**不确定就先
 | 你要做的 | **先读** | 关键纪律 |
 |---|---|---|
 | 新增/修改告警规则、排查告警误报 | `references/alerting.md` | **写告警前必读**——含 circuit_state/时延/namespace 等指标陷阱铁律 |
-| 推送/更新看板(dashboard) | `references/dashboards.md` | 用 skill 自带脚本;**先探测数据源**;folder-SA 首推 403 直接重跑 |
+| 推送/更新看板(dashboard) | `references/dashboards.md` | 用 skill 自带脚本;**先探测数据源**;folder-SA 首推 403 直接重跑;耗时(duration)指标必须 P50/P90/P95/P99 四口径、一分位一 panel |
 | 校准阈值 / 诊断误报根因 | `references/diagnostics.md` | **写任何阈值前必读**——先查真实 series,不凭假设 |
 
 > 这些 references 平时不占上下文,按需读取。**不确定该读哪份就先读 alerting.md**(覆盖面最广)。

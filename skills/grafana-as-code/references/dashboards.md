@@ -65,6 +65,13 @@ curl -sf "$GRAFANA_URL/api/datasources/proxy/uid/<uid>/api/v1/query" \
   即图例渲染成下方表格,带 **Mean / Max** 两列并默认按 **Mean 倒序**(`sortBy` 用列显示名
   `"Mean"`,不是 reducer 名 `mean`)。单条 series 的趋势图(错误率/成功率/命中率)同样套这个,
   一行 Mean/Max 也有信息量。**例外**:`barchart` 桶图保持 `{ "showLegend": false }`,不套此规。
+- **duration/耗时类指标必须 P50、P90、P95、P99 四口径齐全,且一个分位一个 panel**:凡展示
+  耗时(duration/latency/elapsed 等 histogram)的看板,**必须**同时给出 P50、P90、P95、P99
+  四个 `histogram_quantile` 面板——**拆成四个独立 panel,不许把多个分位混进同一个 panel**
+  (混在一起时 P50 会被 P99 的量级压成地板线,且按 series 排序/告警定位都变难)。四个 panel
+  标题带口径后缀(如 `XXX Duration P50` / `... P90` / `... P95` / `... P99`),除
+  `histogram_quantile(0.5|0.9|0.95|0.99, ...)` 的分位参数外查询完全一致,排布放同一行,
+  方便横向对比。只画一两个分位(只有 P95/P99)视为不完整,补齐再推。
 - **桶类 Counter**(amount/rows/batches 等带 bucket label):用 **barchart + instant +
   format=table**,bucket label 作 x 轴,**不能 `histogram_quantile`**。
 - **reducer 一律用 `mean`,不要用 `lastNotNull`(=Last)**:所有带 calculation/reducer 的

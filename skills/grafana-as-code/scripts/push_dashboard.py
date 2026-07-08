@@ -108,11 +108,24 @@ def pin_datasource(dashboard: dict, ds: dict) -> None:
             target["datasource"] = ds
 
 
+REQUIRED_QUANTILES = ("0.5", "0.9", "0.95", "0.99")  # P50/P90/P95/P99, all four, one panel each
+# duration-like histograms only — size/count histograms (tokens, rows, ...) are exempt
+DURATION_METRIC_RE = re.compile(r"duration|latency|elapsed|lag|_seconds|_time_ms|_ms\b", re.I)
+
+
+def _norm_quantile(raw: str) -> str:
+    try:
+        return f"{float(raw):g}"
+    except ValueError:
+        return raw
+
+
 def lint(dashboard: dict, path: Path) -> list[str]:
     """Non-fatal convention checks from references/dashboards.md."""
     warnings = []
     if not dashboard.get("uid"):
         warnings.append(f"{path.name}: missing dashboard uid — upsert will not be idempotent")
+    metric_quantiles: dict[str, set[str]] = {}
     for panel in dashboard.get("panels", []):
         title = panel.get("title", "?")
         if panel.get("type") == "timeseries":
@@ -124,6 +137,27 @@ def lint(dashboard: dict, path: Path) -> list[str]:
             calcs = panel.get("options", {}).get("reduceOptions", {}).get("calcs")
             if calcs and calcs != ["mean"]:
                 warnings.append(f"{path.name} / {title}: reducer should be [\"mean\"], got {calcs}")
+        panel_quantiles: set[str] = set()
+        panel_is_duration = False
+        for target in panel.get("targets", []):
+            expr = target.get("expr", "") or ""
+            quantiles = {_norm_quantile(q) for q in
+                         re.findall(r"histogram_quantile\(\s*([0-9.]+)", expr)}
+            for metric in re.findall(r"([a-zA-Z_:][a-zA-Z0-9_:]*)_bucket\b", expr):
+                if quantiles and DURATION_METRIC_RE.search(metric):
+                    metric_quantiles.setdefault(metric, set()).update(quantiles)
+                    panel_is_duration = True
+            if quantiles:
+                panel_quantiles |= quantiles
+        if panel_is_duration and len(panel_quantiles) > 1:
+            warnings.append(f"{path.name} / {title}: mixes quantiles {sorted(panel_quantiles)} "
+                            "in one panel — split into one panel per quantile (P50/P90/P95/P99)")
+    for metric, seen in sorted(metric_quantiles.items()):
+        missing = [q for q in REQUIRED_QUANTILES if q not in seen]
+        if missing:
+            warnings.append(f"{path.name}: duration metric {metric} only has quantiles "
+                            f"{sorted(seen)} — add panels for {missing} "
+                            "(P50/P90/P95/P99 must all be present, one panel each)")
     return warnings
 
 
