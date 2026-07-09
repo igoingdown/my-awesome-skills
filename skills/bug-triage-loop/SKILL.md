@@ -301,6 +301,15 @@ rmdir "${WT_POOL}" 2>/dev/null || true
 
 ### Step 8:实锤打分
 
+**Step 8 前置:现状回验三查(P1 规则,来自一次"AI 替用户说话"真实事故复盘)**
+
+投诉时间点的证据只能证明"当时发生过",报告在给处置建议前必须补三查:
+
+1. **问题现在还在吗**:查该实体的**最新状态**(如会话表的 last_message_content / updated_at 等冗余字段,或该 uid 当天 SLS 请求)。"已自愈"和"正在恶化"的处置建议完全不同。主消息存储不可达时的绕行:快照表(如 feedback 表存的上下文快照)、末条冗余字段、SLS ACCESS 日志里的 req body。
+2. **用户行为时间线**:拉按天的使用量化表(如日聊天轮数/日订单),和投诉时间对齐。行为断崖(如 726→64→12→4 轮/天)是严重度和优先级的硬依据,能把 low 抬到 high。
+3. **用户价值画像**:涉及"重度/付费/VIP"断言必须查 order + subscription + wallet 三表实锤(见 rubric.md 反例)。付费用户正在流失 = 处置优先级直接拉满,且 CS 可能需要补偿动作。
+4. **实体血缘**:用户"重开/重置/新建"类自救操作,查血缘字段(parent_id / branch_from_* / is_root)确认是真白板还是分支复制。分支会携带全部历史,把"自救失败"误读为"复发"会导错根因方向。
+
 按 `prompts/rubric.md` 打分。**严重度用 bug-analyze 的 critical/high/medium/low 四档**(triage.md 里已完成映射,不需要额外转换)。
 
 **实锤度**是本 skill 独有的 5 档:confirmed/likely/needs-more-signal/insufficient/not-bug-after-analysis。
@@ -308,6 +317,8 @@ rmdir "${WT_POOL}" 2>/dev/null || true
 ### Step 9:生成 review markdown
 
 按 `prompts/report-format.md` 模板输出。**沿用团队现有 review comment 约定**(用 `<details>` 折叠长内容)。
+
+**CS 口径三验(P1 规则,来自一次"AI 替用户说话"真实事故复盘)**:报告若含"给用户的操作建议",每条必须过三验才能写:(a) 操作在产品里存在——查路由表/前端入口,产品没有"删除消息"就不能建议"删除",只能说"编辑/重说";(b) 该用户有权限——非卡主不能改角色卡,建议改成用户可控的等价物(如 persona 昵称);(c) 机制上真影响目标——如"编辑消息"要先验证存储是物理覆盖且 LLM 读同一数据源。另:用户要发出去的话术,给**中英对照**(中文给运营看,英文可直接发用户)。
 
 ### Step 10:写 review-queue
 
@@ -445,6 +456,19 @@ open('state/review-queue.jsonl', 'w').writelines(lines)
 - **bytebase `query_database` 断** → 换 `call_api` 显式全路径(operationId=SQLService/Query + name=instances/<inst>/databases/<db>),这条通路和高层 API 走不同代码路径
 - **aliyun-sls 某 region 断** → 换其他 region;若 query 语法(短语精确匹配)返回 0 而全文关键字有,换用宽松关键字
 - **签署 3 次全断** → 该证据源标 tag=`tool_failure`,**不作为 absence signal 使用**;报告里显式列出"因工具不可用未验证"
+
+### bytebase 授权断链降级序列(P1 规则,来自一次"AI 替用户说话"真实事故复盘)
+
+bytebase MCP 报 401/token expired 时按序降级,**不要卡在重授权上等用户**:
+
+1. 读 `~/.claude/.credentials.json` 的 mcpOAuth 条目拿 accessToken 直接 curl REST(条目可能被并发会话轮换清空,要判空)
+2. 有 refreshToken → `POST /api/oauth2/token` grant_type=refresh_token 续签(**必须带正常 User-Agent**,如 `bytebase-mcp-proxy/1.0`,Cloudflare 挡 Python-urllib 默认 UA)
+3. 本地 bytebase-mcp-proxy 活着 → 走 `http://127.0.0.1:38787/mcp` 手写 MCP JSON-RPC(initialize → notifications/initialized → tools/call),工具用 `call_api` 显式资源名(SA 无 bb.databases.list 权限,`query_database` 按名解析会 PERMISSION_DENIED)
+4. 全断 → 标 tag=tool_failure,列"未验证项"
+
+### 大体量用户数据的处理规范(P1 规则,用户明确要求)
+
+拉用户聊天记录/日志等大体量数据时,**先落盘到 /tmp,再写 python 脚本做统计/模式分析,只把统计结论和抽样片段带回上下文**。禁止把几十 KB 的原文整段读进上下文:一浪费预算,二用户隐私内容不应大面积进入对话。典型:message_feedback.chat_messages(50 条快照约 53KB)→ 存 json → 脚本算句式密度/词数分布 → 上下文里只留数字和 1-2 条示例。
 
 ### Subagent 兜底 wakeup fire 时的第一动作(P1 规则)
 

@@ -6,3 +6,5 @@ venv/
 __pycache__/
 .agents/
 .claude/
+# bug-triage-loop 运行时状态,含真实事故数据,不进 git
+state/
