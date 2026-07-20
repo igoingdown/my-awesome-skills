@@ -51,6 +51,11 @@ make push         # 推送规则(复用现网联系点,需 GRAFANA_URL/GRAFANA_T
    `CHAT_POD` fragment);recsys 用 `app="tipsy-recsys"` 或 `tipsy-recsys-.*` pod 前缀。
 4. **多副本 Gauge 必聚合**:掉坡类显式 `sum()`,泄漏类按单实例 `instance`,否则审计会看到
    "数字乱跳"。
+5. **新告警"配上就报"是红线,推送前必须回测**:把最终告警表达式对近 7 天历史跑一遍
+   (instant + range query,可复用 `references/diagnostics.md` 的脚本),确认触发次数符合预期
+   ——应为 0,或恰好只命中已知事故窗口。回测不过就回去查 selector/指标是否真的存在
+   (典型翻车:存活类规则的 job/pod 选择器写错,指标压根没有 series → 建好即 firing)。
+   节奏解耦:**看板可以先推,告警必须回测通过后再推**;一批新规则里任何一条没回测,整批都别推。
 
 ---
 
