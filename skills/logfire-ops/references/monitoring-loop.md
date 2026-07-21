@@ -68,12 +68,13 @@
 | `time_window` | 评估窗口（ISO 8601 duration） | `PT1H` / `PT10M` / `P1D` |
 | `frequency` | 多久评估一次 | `PT15M` / `PT10M` / `PT1H` |
 | `watermark` | 数据延迟补偿 | `PT1M` |
-| `notify_when` | `has_matches`（有结果就通知） | `has_matches` |
+| `notify_when` | 按条件形态选,见下方设计要点 | `has_matches` / `starts_having_matches` |
 | `channels` | 通知渠道（飞书 webhook 已配，复用现有 channel id） | `0e41be0c-...` |
 | `environments` | 限定环境，空=全部（规则里多在 query 内写 `='prod'`） | `[]` |
 
 设计要点：
 - **window 与 frequency 对齐**（如都 `PT10M`）可避免重复计数/刷屏。
+- **`notify_when` 按条件形态选**：突增/事件类条件（正常时 query 无结果）用 `has_matches`；「一旦出现会连续多个窗口持续命中」的**状态类条件**（存量脏数据存在、水位超限、某配置缺失）用 `starts_having_matches`——只在从无到有的边沿报一次，否则每个评估窗口都重发同一条告警轰炸群。要同时感知恢复用 `has_matches_changed`。真实教训：一条状态类告警配成 `has_matches`，配上就每窗口重复报，修法就是改 `notify_when`，而不是反复调阈值。
 - query 里**带上命中条数 + 关键维度**（模型名/route/reason），这样飞书卡片正文就有上下文。
 - 阈值留余量过滤正常波动（如「7 天约 5 次」就设 1h 内≥3 才报）。
 
@@ -103,7 +104,7 @@ alert_create(
 3. query 口径是否覆盖这类错误（典型漏：报错走 4xx / 应用层日志，规则只盯 5xx span）；
 4. **用出事窗口回放**：把规则 query 加上事发的 `start_timestamp/end_timestamp` 手动 `query_run`，理应命中——不命中就是口径问题，命中了则问题在 2/3 环。
 
-**新建/补齐告警后必须验证，不许「配完即信」**：用历史出事窗口回放 query 确认能命中；channel 送达有条件就人为触发一次核实。周期巡检（/loop 或每日定时）时顺带体检全部规则的 `has_errors` 与 `last_run` 是否停跳——**告警系统本身也要被监控**。
+**新建/补齐告警后必须双向验证，不许「配完即信」**：正向——用历史出事窗口回放 query 确认能命中；反向——用**正常时段窗口**回放确认平时不命中。「配上即报且每窗口重复报」不是灵敏，是口径把常态当异常、或 `notify_when` 选错（见上方设计要点），先修语义再定阈值精确值。channel 送达有条件就人为触发一次核实。周期巡检（/loop 或每日定时）时顺带体检全部规则的 `has_errors` 与 `last_run` 是否停跳——**告警系统本身也要被监控**。
 
 ## 巡检 + 看板 + 告警怎么配合
 
