@@ -469,6 +469,11 @@ bytebase MCP 报 401/token expired 时按序降级,**不要卡在重授权上等
 3. 本地 bytebase-mcp-proxy 活着 → 走 `http://127.0.0.1:38787/mcp` 手写 MCP JSON-RPC(initialize → notifications/initialized → tools/call),工具用 `call_api` 显式资源名(SA 无 bb.databases.list 权限,`query_database` 按名解析会 PERMISSION_DENIED)
 4. 全断 → 标 tag=tool_failure,列"未验证项"
 
+### 生产 DB 访问纪律(P0 规则,用户明确要求)
+
+- **读:控制 SQL 复杂度和对 DB 的压力**——查询必须带 LIMIT、用索引键(uid / 主键 / 时间列)过滤,禁止大表全扫和多表复杂 join;大范围统计拆成小批多次跑,别让一条定位查询把主库拖慢。
+- **写:绝不直连执行**——本 skill 的定位链路是只读的,任何写操作(UPDATE / DELETE / INSERT / DDL,含脏数据清理)一律走工单(如 bytebase `propose_database_change`)交用户 review 后执行;报告里只给建议 SQL + 工单链接,不代执行。
+
 ### 大体量用户数据的处理规范(P1 规则,用户明确要求)
 
 拉用户聊天记录/日志等大体量数据时,**先落盘到 /tmp,再写 python 脚本做统计/模式分析,只把统计结论和抽样片段带回上下文**。禁止把几十 KB 的原文整段读进上下文:一浪费预算,二用户隐私内容不应大面积进入对话。典型:message_feedback.chat_messages(50 条快照约 53KB)→ 存 json → 脚本算句式密度/词数分布 → 上下文里只留数字和 1-2 条示例。

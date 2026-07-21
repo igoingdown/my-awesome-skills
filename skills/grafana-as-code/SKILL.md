@@ -85,6 +85,10 @@ source "$HOME/github/my_dot_files/secrets.sh"      # 注入 GRAFANA_URL / GRAFAN
    确认不会冲掉其他团队的路由(告警 `make push` 默认已不动它们,详见 alerting.md)。
 4. **跨服务告警/看板就近放各自仓库**(指标归属者维护),别把 K8s/Pineapple 等基础设施告警
    塞进本后端仓。通用脚本随 skill 分发,不复制进业务仓。
+5. **监控产物不进 PR**(用户多次纠偏后定下的纪律):服务仓 grafana 部署目录下的看板 JSON、
+   告警 spec/generated 产物,一律**不随业务代码 PR 提交**——推送靠脚本直连 Grafana,产物
+   本地留档即可。提 PR 前自查 `git status` / diff,把这类文件从暂存区剔除;发现已混入的,
+   先从 PR 里删掉再谈合入。
 
 > ⚠️ **能力专属的铁律**(circuit_state=1 可用、gin 时延桶上限陷阱、namespace 混服务过滤、
 > 比率必 clamp_max、多副本 Gauge 必聚合…)在 `references/alerting.md` —— **写告警必读那份**,
@@ -95,4 +99,4 @@ source "$HOME/github/my_dot_files/secrets.sh"      # 注入 GRAFANA_URL / GRAFAN
 - 各能力的故障速查见对应 `references/*.md`。
 - 开放问题(阈值校准清单、现网指标 bug、recsys 文件夹迁移)见
   `deploy/grafana/alerting/NOTES.md` 与 `deploy/grafana/PROGRESS.md`。
-- 改完 `deploy/grafana/` 务必 `git diff` 审查再提交。
+- 改完 `deploy/grafana/` 务必 `git diff` 审查;这些产物**不进业务代码 PR**(见铁律 5),本地留档即可。
