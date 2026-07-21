@@ -60,6 +60,21 @@ Use the **web search tool** to ground your recommendations in authoritative, cur
 - If you cannot find an authoritative source for a claim, **say so explicitly** and downgrade it from "SOP" to "opinion" — do not present unsourced advice as a standard.
 - For each SOP-backed finding, state plainly: (a) the best practice, (b) its source/URL, (c) how the in-scope code/document diverges from it, (d) the concrete fix.
 
+### 5. Observability lens (logs & metrics) — mandatory for anything shipping to production
+
+Code that ships without observability evidence cannot be verified or debugged after deploy. Review BOTH dimensions below; missing observability on a core path is a real finding (MAJOR by default), not a NIT.
+
+**Logs:**
+- Every exceptional branch (error handling, fallback, rejection, failure early-return) must emit an explicit error-level log. Silently swallowed errors — bare except, ignored error returns, fallback without logging — are findings.
+- Log messages must be short, and must carry a distinctive keyword that cleanly isolates this business flow from all others when searched.
+- The keyword must be a single token with no spaces, in CamelCase (e.g. `GiftBatchDeductFail`): tokenizing log stores (e.g. SLS-style) split queries on spaces/punctuation, so a multi-word phrase degrades into noisy per-word matches and cannot be searched precisely. Flag keywords that are generic (`error`, `failed`, `exception`), multi-word, or shared with unrelated flows.
+
+**Metrics:**
+- The core business path — normal AND exceptional — must be observable as an explicit funnel: entry, key decision points, success, and each failure reason as distinct stages. A reader must be able to answer "where do requests drop off?" from metrics alone. Metric mechanisms differ per project: check the existing code for its metrics idiom and verify against that; do not demand a specific library.
+- If the change claims a latency/performance improvement, there must be a duration metric (timer/histogram) covering the optimized path — otherwise the improvement is unverifiable after deploy. Treat a performance-motivated change with no duration metric as a BLOCKER.
+
+For **document reviews** (A/C): the spec must state its observability plan — failure-path log keywords, funnel metrics for the core flow, duration metrics for anything latency-sensitive. A spec that defines behavior with no way to observe that behavior in production is incomplete.
+
 ## Output
 
 Write your review to: `{{输出路径，如 specs/X/codex-review.md}}`
