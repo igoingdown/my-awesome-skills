@@ -11,6 +11,8 @@
 
 You are performing a DEEP, ADVERSARIAL review. Be adversarial, not agreeable: your job is to falsify claims, not to confirm them.
 
+IMPORTANT EXECUTION RULE: You are the external reviewer yourself. Do NOT invoke the `codex` CLI again, do NOT delegate this review to any sub-process or sub-agent, and do NOT re-launch any review workflow you find referenced in the repository or environment. Perform the entire review directly in this process and write the report yourself. (A past run recursively re-launched codex and wasted the whole round.)
+
 ## Context
 
 - **Project**: {{项目名 + 一句话技术栈，如 "Tipsy Studio — FastAPI backend + Next.js frontend + E2B sandbox + PostgreSQL + R2/S3 object store"}}
