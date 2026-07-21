@@ -121,6 +121,13 @@ After compaction, resume, interruption, or stale context:
 
 Use `references/recovery-protocol.md` for exact recovery steps.
 
+## Stall and Oversized-Document Policy
+
+Two failure modes observed in real long runs:
+
+- **Stalled background work.** A subagent, workflow, or background task that loops on API retries or network errors is not making progress. Do not wait indefinitely: if the same unit shows repeated retries with no new output, stop it, record the attempt in `blockers.md`, and restart it from durable state. Durable files make restarts cheap; silent waiting is the expensive option.
+- **Oversized working documents.** If `plan.md` or an implementation plan grows so large that re-reading it every cycle overflows the context (symptom: forced compaction or API retry loops on every cycle), split it: one file per task plus a short index, and load only the current task's file. Do not keep growing a single monolithic plan document.
+
 ## Blocker Policy
 
 A blocker is valid only after 3 concrete attempts against the same issue.

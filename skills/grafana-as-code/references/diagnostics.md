@@ -20,5 +20,9 @@
 校准出的阈值回填到 `alerting/alerts.spec.yaml`(或 recsys 那套),再走
 `references/alerting.md` 的 generate → validate → push 流程。
 
+> **问题修复上线后要主动回看相关告警阈值**:修复前的异常高水位会污染 7 天基线(用
+> `recalibrate_1d.py` 剔除污染段再算);修复后水位整体下降,原阈值可能变得过松(漏报)
+> 或仍按事故水位设定(永不触发)。等新水位稳定 1-2 天后按新基线重校准再推。
+
 > 待校准清单(RSS/goroutine/各域 ratio·latency 阈值多为占位)见
 > `deploy/grafana/alerting/NOTES.md` 与 `deploy/grafana/PROGRESS.md`。
