@@ -69,10 +69,14 @@ When recording decisions later, use:
 ## <timestamp> - <short title>
 
 Decision:
+Decided by: user | agent
 Reason:
 Alternatives considered:
 Impact:
+Scope change: none | dropped <what> | downscoped <what>
 ```
+
+`Decided by` is required. It answers "when did I decide that?" without reconstruction, and keeps an agent-side simplification from being reported later as a user decision. Fill `Scope change` whenever the decision removes or shrinks something that was already in the aligned spec.
 
 ## blockers.md
 
