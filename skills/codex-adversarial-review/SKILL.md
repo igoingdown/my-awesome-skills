@@ -29,6 +29,7 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 3. 健康监控循环：定期采样进程/日志/子进程，异常即报，产出 codex-review.md
 4. 本 Agent 逐条复核 findings + 核验 SOP 出处可达
 5. 给净结论：must-fix / 夸大 / 误读 / SOP 站不住 + 上线建议
+6. 要发到 PR 上的评论：先跟用户逐条对齐措辞与定级，确认后才发
 ```
 
 **步骤 1 — 写指令**：把评审指令写成独立文件（留档、可复跑）。必含要素、A/B/C 三种对象取舍、强制输出结构，见 `references/review-instructions.md`；填空式模板见 `review-prompt-template.md`。
@@ -38,6 +39,8 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 **步骤 3 — 健康监控（不是被动等）**：CodeX xhigh 深评常跑 30-60+ 分钟，期间可能死掉、卡死或跑偏（实测发生过：递归再起子 codex、网络重试空转）。必须挂**监控循环**而非只等退出通知，每 60-90s 采样一次：进程活着吗、日志还在增长吗（mtime/size）、有没有意外子 codex。日志停滞 >5 分钟或出现子 codex 即为异常，**立刻把状态报给用户**（进程清单 + 判定依据，kill 仍须用户确认）。用户中途询问进度时，报"跑了多久 + 日志增长到多少 + 最近在做什么（tail 日志）"，不要让用户干等。监控脚本与判定标准见 `references/codex-invocation.md`。注意：`codex-review.md` 落盘 ≠ 评审结束，CodeX 可能还会改写它，**以进程退出为准**。
 
 **步骤 4+5 — 二次评估（最关键，别省）**：CodeX 会夸大/误读/定级偏重/给失效出处。逐条回代码复核 + 核验每个 SOP URL，再给用户净结论。判定四档（✅属实 / ⚠️定级过重 / ❌误读 / 🔗出处核验）、反模式清单、完整案例，见 `references/evaluation-and-antipatterns.md`。
+
+**步骤 6 — 对外发言前对齐**：净结论落本地是内部产物，发成 PR 评论就是署用户名的对外发言。顺序固定「先核实 → 再向用户解释每条问题与定级 → 用户裁定（常见是改措辞、降一级）→ 才发评论」。未确认前 findings 只留本地文件，见 `references/evaluation-and-antipatterns.md`。
 
 ## 循环评审（review-until-pass）纪律
 
