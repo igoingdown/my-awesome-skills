@@ -28,7 +28,7 @@ Find the task directory from the user request. Preferred layout:
 ```text
 specs/<name>/
   spec.md
-  plan.md
+  plan.md            # or implementation.md for per-line low-level design
   task.md
   verification.md
 ```
@@ -44,6 +44,17 @@ specs/<name>/
 
 Use `references/state-template.md` for the initial contents.
 
+## Document Layering
+
+Keep two design layers separate instead of merging them into one document:
+
+- **spec.md** — coarse-grained design: background, goal, constraints, risks, approach, impact, ROI. It also indexes the implementation chapters.
+- **implementation.md** (or `impl-plan.md`) — low-level design: which files change, which lines change, why, and the observability added with the change.
+
+Do not collapse the two. The spec is what you align with the requester and review before work starts; the implementation is what you review line by line before editing code. When asked what the difference is, answer by granularity and audience, not by file name.
+
+If the implementation grows large, split it into chapters and have the spec list them. See the oversized-document policy below.
+
 ## Startup Protocol
 
 1. Read `task.md`, `state.md`, and `verification.md`.
@@ -53,6 +64,20 @@ Use `references/state-template.md` for the initial contents.
 5. Update `state.md` with the current task before editing.
 
 If `state.md` is missing, initialize `state.md`, `decisions.md`, and `blockers.md` first. Do not ask the user to create them manually.
+
+## Alignment Gate
+
+When the user asks to initialize a plan, investigate, or design without implementing, stop at the plan. Report the execution plan and wait.
+
+Treat these as explicit alignment requests: "do not implement yet", "let's align first, then take the next step", "don't touch the document yet, tell me how you plan to change it".
+
+Under an alignment request:
+
+- Investigate the chain end to end first: where the code actually does the thing, which branches and bypass paths exist, which caches or invalidation rules are involved. Report unknowns as unknowns.
+- Present the options with tradeoffs and a recommendation. Do not start editing the chosen one until the user picks.
+- Ask the open questions instead of guessing. The user has repeatedly invited questions at this stage; asking is cheaper than reworking.
+
+Once the user picks an option, implement that option. Do not re-open the comparison.
 
 ## Execution Loop
 
@@ -120,6 +145,21 @@ After compaction, resume, interruption, or stale context:
 5. Read only the necessary sections of `plan.md` or `spec.md`.
 
 Use `references/recovery-protocol.md` for exact recovery steps.
+
+## Scope Reduction Policy
+
+Dropping or simplifying part of an agreed plan is a decision, not an implementation detail.
+
+Observed failure: a design element the user had approved quietly disappeared from a later revision, and the user had to ask "why is this gone, and when did I ever decide that?". Silent scope loss is worse than an open disagreement, because it hides from review.
+
+When a task, field, or mechanism from the aligned spec is dropped or downscoped:
+
+1. Record it in `decisions.md` with attribution: who decided (user or agent), when, and the reason.
+2. If the agent decided, say so explicitly. Never present an agent-side simplification as a prior user decision.
+3. Flag it in the response that carries the revision, not only in the file.
+4. If the drop touches something the user explicitly asked for, ask before revising instead of revising and reporting.
+
+When the user asks "why was X removed", answer with the recorded decision (time, decider, reason). If there is no record, say that plainly — no reconstructed rationale.
 
 ## Stall and Oversized-Document Policy
 
