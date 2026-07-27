@@ -161,11 +161,30 @@ When a task, field, or mechanism from the aligned spec is dropped or downscoped:
 
 When the user asks "why was X removed", answer with the recorded decision (time, decider, reason). If there is no record, say that plainly — no reconstructed rationale.
 
+## Handoff Protocol
+
+Work discovered mid-task that is real but out of scope does not belong to the current task. Split it out into a handoff document and let a separate session pick it up.
+
+Observed pattern: the user repeatedly asked for a side issue to be written up as a handoff document to follow up separately, then started a fresh session or worktree from that file alone. The handoff file was the only context that survived.
+
+A handoff document must stand alone, because its reader has none of this session's context:
+
+- background and goal, one paragraph;
+- the symptom, and what is already proven versus still hypothesis, each with its evidence source;
+- the files, functions, and configuration involved;
+- options considered and any decision already made, with attribution;
+- the concrete next step;
+- how the fix will be verified.
+
+Record the split in `decisions.md` and say in the response that the item left the current task. Do not silently keep it on the current task list.
+
+When asked to continue from a handoff document, treat it like a spec: read it first, initialize missing runtime files, and re-verify its claims against current code before implementing — a handoff written days ago may describe code that has since changed. Prefer a separate worktree for the split-out work so the two lines of change cannot collide.
+
 ## Stall and Oversized-Document Policy
 
 Two failure modes observed in real long runs:
 
-- **Stalled background work.** A subagent, workflow, or background task that loops on API retries or network errors is not making progress. Do not wait indefinitely: if the same unit shows repeated retries with no new output, stop it, record the attempt in `blockers.md`, and restart it from durable state. Durable files make restarts cheap; silent waiting is the expensive option.
+- **Stalled background work.** A subagent, workflow, or background task that loops on API retries or network errors is not making progress. Do not wait indefinitely: if the same unit shows repeated retries with no new output, stop it, record the attempt in `blockers.md`, and restart it from durable state. Durable files make restarts cheap; silent waiting is the expensive option. Liveness is measured by output, not by process state: a unit that is "still running" while its token count, log size, and written artifacts barely move is stalled, not slow — the user has caught this by checking token consumption. When the user asks how it is going, answer with that evidence (elapsed time, output growth, current step, last artifact written), never with "still running".
 - **Oversized working documents.** If `plan.md` or an implementation plan grows so large that re-reading it every cycle overflows the context (symptom: forced compaction or API retry loops on every cycle), split it: one file per task plus a short index, and load only the current task's file. Do not keep growing a single monolithic plan document.
 
 ## Blocker Policy
