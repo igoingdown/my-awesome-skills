@@ -65,6 +65,8 @@ If the implementation grows large, split it into chapters and have the spec list
 
 If `state.md` is missing, initialize `state.md`, `decisions.md`, and `blockers.md` first. Do not ask the user to create them manually.
 
+When the request names a directory rather than a single file (for example "the files under `implementation/`"), enumerate that directory and read every file in it before reporting the plan. Sampling a few and inferring the rest produces a plan with holes, and the user will ask "are you sure you read all of them?" — which means the answer must already be yes. If the set is too large for one context, delegate the reading to subagents per file and merge their summaries; state the file count you covered.
+
 ## Alignment Gate
 
 When the user asks to initialize a plan, investigate, or design without implementing, stop at the plan. Report the execution plan and wait.
@@ -180,12 +182,27 @@ Record the split in `decisions.md` and say in the response that the item left th
 
 When asked to continue from a handoff document, treat it like a spec: read it first, initialize missing runtime files, and re-verify its claims against current code before implementing — a handoff written days ago may describe code that has since changed. Prefer a separate worktree for the split-out work so the two lines of change cannot collide.
 
+A handoff only counts once it is on disk. Write the file, then report its absolute path in the same response, so the next session can start from it. A handoff that exists only as chat text is lost at the session boundary — observed failure: the user opened a fresh session pointed at a handoff path that was never written, and the follow-up work had no context to start from.
+
+If a handoff path you are asked to continue from does not exist, say so and stop. Do not reconstruct a plausible handoff from memory and proceed as if it were the original: locate the real surviving artifacts (design docs, task directories, prior branches), list what you found, and ask which one to continue from. Reconstruction silently substitutes your guess for the previous session's decisions.
+
 ## Stall and Oversized-Document Policy
 
 Two failure modes observed in real long runs:
 
 - **Stalled background work.** A subagent, workflow, or background task that loops on API retries or network errors is not making progress. Do not wait indefinitely: if the same unit shows repeated retries with no new output, stop it, record the attempt in `blockers.md`, and restart it from durable state. Durable files make restarts cheap; silent waiting is the expensive option. Liveness is measured by output, not by process state: a unit that is "still running" while its token count, log size, and written artifacts barely move is stalled, not slow — the user has caught this by checking token consumption. When the user asks how it is going, answer with that evidence (elapsed time, output growth, current step, last artifact written), never with "still running".
 - **Oversized working documents.** If `plan.md` or an implementation plan grows so large that re-reading it every cycle overflows the context (symptom: forced compaction or API retry loops on every cycle), split it: one file per task plus a short index, and load only the current task's file. Do not keep growing a single monolithic plan document.
+
+## Local Verification Cost Policy
+
+Verification steps run on a machine that is often shared and quota-limited. Before running a build, test sweep, or any step that fans out per target, estimate the fan-out and the bytes it will produce, and cap it.
+
+- **Count the targets first.** A whole-project build in a repo with many binaries links them in parallel, each link spawning its own thread pool and re-reading the same large dependency archives. The observable result is hundreds of threads and processes stuck on IO, load in the hundreds while CPU sits idle, and the machine unusable for everyone on it for tens of minutes. Build the specific target the task needs, or pin build parallelism low, before building everything.
+- **Do not read high load as high CPU.** When a verification step hangs, check the blocked-process count and disk queue depth before concluding the machine is compute-bound. Misreading saturated IO as saturated CPU sends the whole diagnosis the wrong way.
+- **Reclaim on the way out.** A cold full build can consume many gigabytes of intermediate artifacts. Delete the build/link temp directories and any probe directories the task created as soon as the step finishes, and record before/after quota so the reclaim is verified rather than assumed. Do not leave cleanup to a later sweep.
+- Prefer a container or a scratch instance for anything that needs a real service to verify against, and destroy it when the check passes. Record in `state.md` that the step ran and was cleaned up.
+
+Put the estimate in `state.md` before running the step, and record the actual cost after. When a verification step has to be skipped because it would not fit the machine, that is a `blockers.md` entry with the numbers, not a silent skip.
 
 ## Blocker Policy
 
