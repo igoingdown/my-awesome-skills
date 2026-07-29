@@ -73,6 +73,8 @@ When the user asks to initialize a plan, investigate, or design without implemen
 
 Treat these as explicit alignment requests: "do not implement yet", "let's align first, then take the next step", "don't touch the document yet, tell me how you plan to change it".
 
+Restate the request before proposing anything. The user asks for the same six-part restatement almost every time a new task starts, and asks for it again when a proposal misses the point: **requirement, goal, constraints, rough approach, risks, blast radius**. Write those six explicitly, in that order, and put what you are *not* going to do next to the blast radius. This is where a misread surfaces cheaply — a proposal that hangs the change off the wrong layer (a generic middleware instead of the specific path the task is about) reads as plausible until the six parts are written out and the constraint it violates becomes obvious. When the user says the plan is wrong and asks you to re-derive the requirement, redo all six from scratch rather than patching the previous proposal.
+
 Under an alignment request:
 
 - Investigate the chain end to end first: where the code actually does the thing, which branches and bypass paths exist, which caches or invalidation rules are involved. Report unknowns as unknowns.
