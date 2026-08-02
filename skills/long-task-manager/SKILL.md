@@ -222,6 +222,14 @@ Record each attempt in `blockers.md` with:
 
 Stop only when the same blocker has failed after 3 concrete attempts and no meaningful progress remains possible.
 
+## Review Walkthrough Policy
+
+When the user says they will review the change ("what changed and how? I'm going to review it"), the deliverable is a walkthrough, not a diffstat. The same asks recur across sessions in these exact shapes: "explain it with a concrete example", "walk the whole logic through one instance", and — for anything iterative — a chain of "why can't this be simpler" questions drilled down to the root cause.
+
+- For each change: why it exists (the problem), what changed (files and behavior), then **one worked example with concrete values** traced through the main path and the key branches. An abstract description of the algorithm does not land; the same explanation with real numbers does.
+- If the diff touches a file or directory outside the task's stated scope, explain why in the walkthrough before being asked. "Why did we change this path at all?" is a question the walkthrough should already answer.
+- For a mechanism more complex than the obvious alternative (a convergence loop instead of a fixed pass count, a conditional reserve, a retry ladder): state the obvious alternative first and show exactly where it breaks — name the dependency cycle or the input that cannot be known up front. The user will keep asking "why not the simpler way" until the root cause is on the table, so put it there first instead of answering one layer per question.
+
 ## Completion Criteria
 
 The long task is complete only when:
