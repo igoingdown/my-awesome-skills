@@ -193,6 +193,7 @@ If a handoff path you are asked to continue from does not exist, say so and stop
 Two failure modes observed in real long runs:
 
 - **Stalled background work.** A subagent, workflow, or background task that loops on API retries or network errors is not making progress. Do not wait indefinitely: if the same unit shows repeated retries with no new output, stop it, record the attempt in `blockers.md`, and restart it from durable state. Durable files make restarts cheap; silent waiting is the expensive option. Liveness is measured by output, not by process state: a unit that is "still running" while its token count, log size, and written artifacts barely move is stalled, not slow — the user has caught this by checking token consumption. When the user asks how it is going, answer with that evidence (elapsed time, output growth, current step, last artifact written), never with "still running".
+- **Long batch runs with no ETA and no wake-up.** When a task fans out over a large work list (per-item model calls, per-file passes, per-user extractions), the user will ask "how is it going, and how much longer?" and then ask you to set a frequent timer that picks the next step up automatically. Both parts are on you to have already done. Report progress as **items done / items total, throughput per minute, and an ETA derived from the two** — plus what the next step is once it finishes. "Still running" and "almost done" are non-answers; if the total is genuinely unknown, say what bounds it. And do not leave a long batch waiting on the user to come back: schedule a recurring check whose interval is a small fraction of the remaining time, so the run is picked up and the next step started shortly after it finishes rather than at the next time someone happens to ask. State the interval and what the check will do when it fires.
 - **Oversized working documents.** If `plan.md` or an implementation plan grows so large that re-reading it every cycle overflows the context (symptom: forced compaction or API retry loops on every cycle), split it: one file per task plus a short index, and load only the current task's file. Do not keep growing a single monolithic plan document.
 
 ## Local Verification Cost Policy
@@ -220,6 +221,14 @@ Record each attempt in `blockers.md` with:
 - next step
 
 Stop only when the same blocker has failed after 3 concrete attempts and no meaningful progress remains possible.
+
+## Review Walkthrough Policy
+
+When the user says they will review the change ("what changed and how? I'm going to review it"), the deliverable is a walkthrough, not a diffstat. The same asks recur across sessions in these exact shapes: "explain it with a concrete example", "walk the whole logic through one instance", and — for anything iterative — a chain of "why can't this be simpler" questions drilled down to the root cause.
+
+- For each change: why it exists (the problem), what changed (files and behavior), then **one worked example with concrete values** traced through the main path and the key branches. An abstract description of the algorithm does not land; the same explanation with real numbers does.
+- If the diff touches a file or directory outside the task's stated scope, explain why in the walkthrough before being asked. "Why did we change this path at all?" is a question the walkthrough should already answer.
+- For a mechanism more complex than the obvious alternative (a convergence loop instead of a fixed pass count, a conditional reserve, a retry ladder): state the obvious alternative first and show exactly where it breaks — name the dependency cycle or the input that cannot be known up front. The user will keep asking "why not the simpler way" until the root cause is on the table, so put it there first instead of answering one layer per question.
 
 ## Completion Criteria
 
