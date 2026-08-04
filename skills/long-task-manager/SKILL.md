@@ -165,6 +165,19 @@ When a task, field, or mechanism from the aligned spec is dropped or downscoped:
 
 When the user asks "why was X removed", answer with the recorded decision (time, decider, reason). If there is no record, say that plainly — no reconstructed rationale.
 
+### When the user proposes the simplification
+
+The opposite direction happens just as often: the user reads a multi-part design and asks "can't we do this the simple way — skip the state machine, just backfill the data?", then follows up with "what's the risk of the simplified version, in detail". Do not answer with a verdict ("that works" / "too risky"). Enumerate, in severity order, what each dropped part was holding up:
+
+- **Name the load each removed part was bearing.** A design with several layers usually has each layer covering a distinct path. Removing a layer exposes whichever path only that layer covered. Walk them one at a time — which code path is now unguarded, and what reaches production through it.
+- **Check the ordering constraints the removal creates.** The most expensive failure in this shape is a step order that silently undoes itself: the data is rewritten, then the very next request writes the old value back, because the guard that would have stopped it was the layer just dropped. State the corrected step order explicitly, and say which steps must not be merged or reordered.
+- **Say what the simplification actually saves.** Often it removes code, not steps — the rollout is the same number of stages with fewer files touched. Claiming the plan got shorter when only the diff got shorter sets up a wrong expectation.
+- **Re-check reversibility.** Replacing a code-level mapping with a one-off data rewrite can turn rollback from "revert one entry and redeploy" into "restore from an archive query", and a many-to-few mapping is not invertible at all. If an archive step becomes the only source of truth for the original values, say so and make it a hard precondition of the rewrite.
+- **Flag the parts that must survive the cut**, and say in the code why they are load-bearing — a guard that looks useless is the one a later reader deletes, which silently restores the original bug.
+- **Reject pattern matching on identifiers that carry no guarantee.** Bulk rewrites are often expressed as a prefix or substring match on an id. If that id has no enforced relationship to the property being selected on (product-facing names need not contain the vendor string), the match is wrong at the edges and cannot be repaired by refining the pattern. Pull both real inventories, classify each value explicitly, and write the rewrite as an enumerated set.
+
+Then give a recommendation with the conditions attached, and record the decision and its attribution as above.
+
 ## Handoff Protocol
 
 Work discovered mid-task that is real but out of scope does not belong to the current task. Split it out into a handoff document and let a separate session pick it up.
