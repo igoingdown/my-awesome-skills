@@ -83,6 +83,18 @@ Under an alignment request:
 
 Once the user picks an option, implement that option. Do not re-open the comparison.
 
+### When the restatement is asked for again in the same session
+
+On a hard task the user will ask for the restatement five or six times in one sitting, each time adding a clause. That is not ritual — each re-ask means the previous one left something unanchored, and the added clause names it. Observed escalation, in the order it arrives: the six parts → the option set per problem with cost/risk/benefit each → the quantitative evidence behind each option → the decision tree and whether it is exhaustive and non-overlapping → blast radius, effort, and ROI per option.
+
+- **Answer the escalation, do not re-send the previous restatement with edits.** Re-asked means re-derive. If a part is genuinely unchanged, say so in one line and spend the space on the new clause.
+- **Every decision node needs a quantitative fact under it, or an explicit "not measured yet".** A tree whose branches are justified by plausibility reads complete and is not; the user asks "what quantitative data supports each choice" precisely to find those nodes. Name the measurement (what was counted, over what window, how many samples) or mark the node unmeasured and say what would measure it.
+- **Claim exhaustive/non-overlapping only after enumerating from the code**, not from the shape of the tree. "Are the branches complete? Is anything missing?" is answerable only by walking the actual branch points in the implementation. If a branch cannot be distinguished with available data, that is a hole — state it rather than folding it into a neighbour.
+- **Carry forward everything the user has supplied.** Each round they correct a fact or answer an open question; the next restatement must contain those answers, attributed to them. Re-asking a question they already answered, or restating a premise they already overturned, is what triggers the next re-ask.
+- **When they say a proposal is not OK, take the counter-proposal as the new baseline.** They will describe an alternative in their own words and ask "did you understand my approach? restate it". Restate their approach, not a defence of yours, and mark where it changes constraints you had assumed.
+
+An answer that cannot yet be given is a legitimate part of the restatement: list what you still need to investigate and what you need from the user, then continue. Silence on an unknown reads as a covered base.
+
 ## Execution Loop
 
 For each task:
