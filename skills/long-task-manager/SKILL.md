@@ -83,6 +83,18 @@ Under an alignment request:
 
 Once the user picks an option, implement that option. Do not re-open the comparison.
 
+### When the restatement is asked for again in the same session
+
+On a hard task the user will ask for the restatement five or six times in one sitting, each time adding a clause. That is not ritual — each re-ask means the previous one left something unanchored, and the added clause names it. Observed escalation, in the order it arrives: the six parts → the option set per problem with cost/risk/benefit each → the quantitative evidence behind each option → the decision tree and whether it is exhaustive and non-overlapping → blast radius, effort, and ROI per option.
+
+- **Answer the escalation, do not re-send the previous restatement with edits.** Re-asked means re-derive. If a part is genuinely unchanged, say so in one line and spend the space on the new clause.
+- **Every decision node needs a quantitative fact under it, or an explicit "not measured yet".** A tree whose branches are justified by plausibility reads complete and is not; the user asks "what quantitative data supports each choice" precisely to find those nodes. Name the measurement (what was counted, over what window, how many samples) or mark the node unmeasured and say what would measure it.
+- **Claim exhaustive/non-overlapping only after enumerating from the code**, not from the shape of the tree. "Are the branches complete? Is anything missing?" is answerable only by walking the actual branch points in the implementation. If a branch cannot be distinguished with available data, that is a hole — state it rather than folding it into a neighbour.
+- **Carry forward everything the user has supplied.** Each round they correct a fact or answer an open question; the next restatement must contain those answers, attributed to them. Re-asking a question they already answered, or restating a premise they already overturned, is what triggers the next re-ask.
+- **When they say a proposal is not OK, take the counter-proposal as the new baseline.** They will describe an alternative in their own words and ask "did you understand my approach? restate it". Restate their approach, not a defence of yours, and mark where it changes constraints you had assumed.
+
+An answer that cannot yet be given is a legitimate part of the restatement: list what you still need to investigate and what you need from the user, then continue. Silence on an unknown reads as a covered base.
+
 ## Execution Loop
 
 For each task:
@@ -216,6 +228,7 @@ Verification steps run on a machine that is often shared and quota-limited. Befo
 - **Count the targets first.** A whole-project build in a repo with many binaries links them in parallel, each link spawning its own thread pool and re-reading the same large dependency archives. The observable result is hundreds of threads and processes stuck on IO, load in the hundreds while CPU sits idle, and the machine unusable for everyone on it for tens of minutes. Build the specific target the task needs, or pin build parallelism low, before building everything.
 - **Do not read high load as high CPU.** When a verification step hangs, check the blocked-process count and disk queue depth before concluding the machine is compute-bound. Misreading saturated IO as saturated CPU sends the whole diagnosis the wrong way.
 - **Reclaim on the way out.** A cold full build can consume many gigabytes of intermediate artifacts. Delete the build/link temp directories and any probe directories the task created as soon as the step finishes, and record before/after quota so the reclaim is verified rather than assumed. Do not leave cleanup to a later sweep.
+- **Report a shared-resource problem with attribution, and do not clean up what you did not create.** When a check hits a machine-level limit (quota exceeded, disk full, load unusable), say so in the same response, separated into three parts: what this task consumed, what has already been reclaimed, and what the remainder is (historical accumulation, another session's artifacts, someone else's files). Deleting the remainder is not yours to do — surface it and let the user decide, even when the limit is blocking your own step. An accurate "this is not from my run, here is what is, here is what I cleaned" is more useful than either a silent cleanup or a bare "disk is full".
 - Prefer a container or a scratch instance for anything that needs a real service to verify against, and destroy it when the check passes. Record in `state.md` that the step ran and was cleaned up.
 
 Put the estimate in `state.md` before running the step, and record the actual cost after. When a verification step has to be skipped because it would not fit the machine, that is a `blockers.md` entry with the numbers, not a silent skip.
