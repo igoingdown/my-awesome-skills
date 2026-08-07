@@ -220,6 +220,14 @@ Verification steps run on a machine that is often shared and quota-limited. Befo
 
 Put the estimate in `state.md` before running the step, and record the actual cost after. When a verification step has to be skipped because it would not fit the machine, that is a `blockers.md` entry with the numbers, not a silent skip.
 
+## Batch and Backfill Job Policy
+
+A batch or backfill job — a script that fans out per-item work (per-user extraction, per-row rewrite, model calls over a candidate list) — is a long task in its own right, with its own where-to-run and de-risk decisions distinct from a one-shot build.
+
+- **Run it where the tools and horsepower are, which is usually local, not the production pod.** The default is: anything that can run locally, runs locally. A production pod is weak, its toolchain is incomplete (no editor, missing utilities), and it is slow; running a script there because that is where the data appears to live is a false economy. Check first whether the job can reach the data from a local run (read-only DB access, an export, a data proxy) — the user's standing rule is "whatever can run locally, run locally; never on production." Only run inside the pod when the data genuinely cannot be reached from outside, and say why when you do.
+- **De-risk the real run with a scaled dry-run before committing to it.** A dry-run over 5 rows proves the happy path, not the run. Before the real pass, run a dry-run large enough to surface the edge cases that only appear at scale — the input that overflows a conversion, the row that reads back empty, the record that crashes one item mid-list — and enumerate up front what else can be pre-validated (schema of the target table, a probe on the known-bad input, the resume path). "How confident are you it will complete without a mid-run crash, and what can we test before starting?" is a question to have already answered, not to be asked.
+- **Confirm idempotent resume before the real run, not after a crash.** Long batches get interrupted (pod restart, network, a single bad row). Verify that a re-run skips already-done work rather than redoing or double-writing it, and that it resumes from durable state — test this on real data before the real pass, so an interruption is a resume rather than a restart. Only then launch the real run detached (e.g. `nohup`), reporting progress as items done / total, throughput, and ETA (see the batch-run bullet under Stall and Oversized-Document Policy).
+
 ## Blocker Policy
 
 A blocker is valid only after 3 concrete attempts against the same issue.
