@@ -169,6 +169,8 @@
 | `environments` | 限定环境，空=全部（规则里多在 query 内写 `='prod'`） | `[]` |
 
 设计要点：
+- **错误文本要多字段兜底，别赌错误只落在一个列里**：同一类失败在不同链路里可能记在不同字段——有的进 `exception_message`，有的裹在 `message` 里，有的塞进 `attributes->>'error'`。告警 query 只 `LIKE` 其中一个字段，就会把记在其它字段里的命中整批漏掉。真实翻车：一条 P0 只查 `exception_message/message`、还用 `span_name LIKE 'chat %'` 收窄，结果连续两天的命中（记在 `attributes->>'error'`、且来自另一条 request chain）全部静默漏报。修法是对错误文本做 `coalesce(exception_message, message, attributes->>'error')` 再匹配，并按 trace 关联 `request_path` 区分链路，不要用 `span_name` 前缀把范围提前焊死。
+- **过滤条件宁可宽一档再靠聚合收敛**：能定位对象的维度（route / chain / model）放进 `GROUP BY` 与结果列，用来事后区分；用来「圈定要不要报」的匹配条件先覆盖全，别用某个只在部分链路成立的前缀/标签当准入闸，否则漏报是静默的、要靠用户回头核口径才发现。
 - **window 与 frequency 对齐**（如都 `PT10M`）可避免重复计数/刷屏。
 - **`notify_when` 按条件形态选**：突增/事件类条件（正常时 query 无结果）用 `has_matches`；「一旦出现会连续多个窗口持续命中」的**状态类条件**（存量脏数据存在、水位超限、某配置缺失）用 `starts_having_matches`——只在从无到有的边沿报一次，否则每个评估窗口都重发同一条告警轰炸群。要同时感知恢复用 `has_matches_changed`。真实教训：一条状态类告警配成 `has_matches`，配上就每窗口重复报，修法就是改 `notify_when`，而不是反复调阈值。
 - query 里**带上命中条数 + 关键维度**（模型名/route/reason），这样飞书卡片正文就有上下文。
