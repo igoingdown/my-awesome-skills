@@ -87,6 +87,60 @@ bash query_chat_history.sh <uid> --export /tmp/chat.jsonl
 
 配套：这类 DDL / 索引变更语句要落到服务仓库存放建表与索引脚本的目录里留档，别只存在于一次会话的聊天记录里——下次有人重建环境时找不到就会漏掉这一列。
 
+## tool-bridge 后端（可选，2026-08-06 实测接通）
+
+除 lindorm 直连（默认）外，可经团队 **tool-bridge** 网关查询：`--backend tool-bridge`。
+定位：TB 是**可选的接入层**，不是替代——lindorm 直连仍是默认，TB 挂了不影响查询（故障域不收敛）。
+
+**实测结论（2026-08-06 逐条跑通，含随机 UID 端到端验证）**：TB 的 tipsy 源有**两套引擎，别混**：
+
+- **搜索侧 `chatsearch_*`（ES）**：`count`/`aggregate` 只出数字/聚合、**禁正文**，且搜索索引 mapping **没有 `sender_type` 字段**（只有 content/character_id/rev_user_id/sequence 等 7 个）。
+- **宽表侧 `lindorm_query`（SQL）**：**可以 `SELECT content` 拿正文 + `sender_type` 真值（1/2，不用猜角色）**。这才是拿原文的正路。
+
+所以 `--backend tool-bridge` 三种模式都实现了：
+
+- `--count` → 宽表 `SELECT COUNT(*) WHERE rev_user_id=<REV>`（分区点查，毫秒级）。
+- `--size N`（page）/ `--export <file>` → 宽表 `lindorm_query` 分页取原文，落**本机** JSONL（含 character_id/sequence/sender_type/timestamp/content）。
+- `--index` 在 TB 后端表示**宽表名**（`chat_history` 默认 / `chat_history_rich` / `chat_conversation_history`），不是 ES 索引全名。
+  前两张用 `rev_user_id`（脚本自动反转；负数值须加 `--reversed`），`chat_history_rich` 用 `user_id` 原值（脚本按表名切换）。
+
+**批量多 UID**：`tb_chat_batch.sh --uids "u1,u2,..." --size 1000`（严格串行、UID 间限速，见 [[devbox-query-pressure-discipline]]）。
+
+### 实现里必须守的坑（都踩过，代码已应对）
+
+1. **tipsy 单 MCP 容器会偶发串台**（返回别的请求结果）——每页必须核对返回回显的 SQL==发出的 SQL，不符即重试（`_parse_tb_lindorm.py` 做校验）。
+2. **`lindorm_query` 返回只展示前 50 行** → 分页 `LIMIT<=50 + OFFSET`，逐页拼。
+3. **宽表 9 秒硬超时** → 只做带 `WHERE rev_user_id=` 的分区点查；**禁全表 `GROUP BY`/`DISTINCT`/无过滤 ORDER BY**（实测 `GROUP BY rev_user_id` 被存储引擎按 `groupby.keys.limit=1000` 熔断）。
+4. **`export_result` 落网关容器侧、拿不回本机** → 不用它，直接解析返回表格落本机。
+5. **rev_user_id 可为负数 BIGINT** → UID 校验放行负号；负值本身就是 rev 值，须 `--reversed`。
+
+### 其它拿原文的路（对照）
+
+- **lindorm 直连（默认后端）**：ES `docvalue_fields` 取 `content`，`--export` 走 search_after 翻页落本机。**但 ES 索引无 `sender_type`**，要角色得回宽表补——所以要 sender_type 时优先用 TB 宽表后端。
+- **bytebase 只读查库**：原文若在 tipsy 后端主库 MySQL，`plugins/bytebase` 的 `query_database` 可 SELECT。库定位务必带 instance：prod=`tipsy-backend-prod-mysql-sj6z`/`tipsy`，test=`tipsy-backend-test-mysql-v8kd`/`fantasy`。
+
+**接入步骤见 `TUTORIAL.md`**。配套：`tb_call.sh`（渐进发现）、`tb_probe.sh`（自证）、`_parse_tb_lindorm.py`（解析防串台）、`tb_chat_batch.sh`（批量串行）。
+TB 凭据 `TB_BASE_URL`/`TB_SK` 放 secrets.sh。真实工具名/入参见 [[tool-bridge-gateway-access]]、[[chat-content-access-paths]]。
+
+### 网关其它能力的可用状态（2026-08-06 全树实测）
+
+本 skill 只用到 tipsy(count)/bytebase(原文) 两块。网关上其它源的现状记在这里，避免下次重新踩：
+
+- **可用（普通 token 直接跑通）**：`mcp/signoz`(日志/trace/metric)、`mcp/coolify`(部署总览)、
+  `mcp/yunxiao`(云效 197 工具，读写混，靠 get_/list_/search_ 前缀判读写)、`plugins/bytebase`(只读查库)、
+  `skills/demo`+`skills/tech`(skillhub)。
+- **飞书**：`plugins/feishu` 走应用身份(tenant_access_token)受 ACL 限。**用本机 `lark-cli`(用户身份)替代**，
+  不用平台那套。读 docx：`lark-cli docs +fetch --doc <id> --doc-format markdown`。
+- **Meego（当前 BLOCK，先不弄）**：`plugins/meego` 报 `未绑定 Meego 操作人身份` —— 这把 SK 未绑 user_key，
+  连只读都 `permission_denied`。**需要时找管理员**在网关 `plugins/meego` 的 `providerConfig.userKeys`
+  加 `{"<你的SK>":"<你的user_key>"}`(user_key 用邮箱经 query_user 反查)。替代：`mcp/meego`(固定身份纪世赫)不需绑定即可用，代价是署名不是你。
+- **Expo（当前 BLOCK，先不弄）**：Expo=跨平台 App 平台(EAS 构建/OTA/TestFlight)。`mcp/expo` 需 OAuth 授权，
+  且 `tb tool auth mcp/expo` 实测报 `no scope grants 'register'` —— 普通 token 无授权挂载点权限，**自己做不了**。
+  **需要时找管理员**用 admin token 授权，或给 SK 授 register scope；前提是你有能访问团队项目的 Expo 账号。
+- **tb CLI 已装**(`@tool-bridge/cli`)，但要 Node≥22：用前先 `nvm use 24`(默认 node v14 会崩)。
+
+详见 `TUTORIAL.md` 附录与 [[tool-bridge-gateway-access]]。
+
 ## 配置（索引名/字段名放 env，真实内部命名不进仓库）
 
 | 变量 | 必填 | 默认 | 说明 |
