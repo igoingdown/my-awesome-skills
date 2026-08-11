@@ -43,7 +43,7 @@ https://tool-bridge.fantacy.live/login
 - **有效期 90 天**，过期重新走 `/login`。
 - 同一人再次登录会 **rotate**（旧 key 先删再签），所以每人同时只持有一把登录 key。
   ⚠️ 如果你别处已经在用这把 key，重新登录会让旧的失效。
-- 登录会**自动绑定你的 Meego 操作人身份**（本试点用不到，但要知道）。
+- 登录**不会**自动绑定 `plugins/meego` 的操作人身份——那条通路仍需管理员显式配 `userKeys` 映射（见附录第 2 节，别按“登录即绑定”预期它）。
 - 普通 token 作用域固定为 `mcp/** + plugins/** + skills/**` 的 read/call/write；
   `system/**`、`device/**` 看不见（admin 才有）。
 
@@ -143,12 +143,18 @@ tb whoami                                          # 应显示 auth: ok
 建文档/读私有文档/写知识库全走它，忽略 feishu 节点即可。读 docx：
 `lark-cli docs +fetch --doc <id或URL> --doc-format markdown`。
 
-### 2. Meego：需管理员绑定你的身份
+### 2. Meego：两条通路，`mcp/meego` 已实测可用（读+评论），`plugins/meego` 仍需管理员绑定
 
-`plugins/meego` 报 `未绑定 Meego 操作人身份`。**自己做不了，需管理员**在网关 `plugins/meego` 的
-`providerConfig.userKeys` 加 `{"<你的SK>":"<你的user_key>"}`。你的 user_key 用邮箱反查
-（`query_user {"emails":["你的邮箱"]}`，但该源当前对你不可用，让管理员帮查）。绑定后写操作显示成你本人。
-**替代**：`mcp/meego`（46 工具）用固定身份纪世赫，不需绑定就能用，代价是署名不是你。
+Meego 有两个入口，别混：
+
+- **`mcp/meego`（固定身份，读+评论已跑通）**：不需要绑定即可用，读类（列工作项类型、按 MQL 查、查状态、查评论）与 `add_comment` 都实测成功。代价是写操作署名是那个固定身份、不是你本人。适合“查我要关注的需求/缺陷、给某条留言”这类日常。
+- **`plugins/meego`（以调用方身份落地）**：要写操作显示成你本人才走这条，报 `未绑定 Meego 操作人身份` 时**需管理员**在网关该节点 `providerConfig.userKeys` 加 `{"<你的SK>":"<你的user_key>"}`（user_key 用邮箱经 `query_user` 反查）。**飞书登录不会自动建这条映射**，别指望登录即绑定。
+
+用 `mcp/meego` 时几个必踩的坑（都实测过）：
+- **几乎每个工具都要 `project_key`**，而它无法自动列举，只能从 Meego 网页 URL 里取（形如路径中的空间标识）；传错或漏传即失败。
+- **字段 label 因工作项类型而异**：缺陷类的标题字段名与需求类不同，写 MQL / 解析返回前先确认目标类型的字段名，别套用另一类的。
+- 返回体尾部可能拼有诊断串，解析时先剥掉再取数据；评论定位要用真实数字 ID。
+- 查“某条缺陷现在是进行中还是已解决”要显式 select 状态字段，默认查询不带它。
 
 ### 3. Expo：需管理员授权（普通 token 无 register scope）
 

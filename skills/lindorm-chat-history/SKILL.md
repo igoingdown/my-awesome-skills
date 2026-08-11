@@ -131,9 +131,7 @@ TB 凭据 `TB_BASE_URL`/`TB_SK` 放 secrets.sh。真实工具名/入参见 [[too
   `skills/demo`+`skills/tech`(skillhub)。
 - **飞书**：`plugins/feishu` 走应用身份(tenant_access_token)受 ACL 限。**用本机 `lark-cli`(用户身份)替代**，
   不用平台那套。读 docx：`lark-cli docs +fetch --doc <id> --doc-format markdown`。
-- **Meego（当前 BLOCK，先不弄）**：`plugins/meego` 报 `未绑定 Meego 操作人身份` —— 这把 SK 未绑 user_key，
-  连只读都 `permission_denied`。**需要时找管理员**在网关 `plugins/meego` 的 `providerConfig.userKeys`
-  加 `{"<你的SK>":"<你的user_key>"}`(user_key 用邮箱经 query_user 反查)。替代：`mcp/meego`(固定身份纪世赫)不需绑定即可用，代价是署名不是你。
+- **Meego（部分可用，2026-08-11 实测）**：两条通路别混。`mcp/meego`（固定身份，46 工具）**不需绑定即可用**——读类与 `add_comment` 都跑通了（查我参与的需求/缺陷、查状态、留言），只是写操作署名是那个固定身份、不是你本人。`plugins/meego`（以调用方身份落地、写操作显示成你）仍报 `未绑定 Meego 操作人身份`：**飞书登录不会自动建这条映射**，需管理员在网关该节点 `providerConfig.userKeys` 加 `{"<你的SK>":"<你的user_key>"}`(user_key 用邮箱经 query_user 反查)。`mcp/meego` 的必踩坑见 `TUTORIAL.md` 附录第 2 节（几乎每个工具要 `project_key` 且只能从网页 URL 取、字段 label 因工作项类型而异、查状态要显式 select 状态字段）。
 - **Expo（当前 BLOCK，先不弄）**：Expo=跨平台 App 平台(EAS 构建/OTA/TestFlight)。`mcp/expo` 需 OAuth 授权，
   且 `tb tool auth mcp/expo` 实测报 `no scope grants 'register'` —— 普通 token 无授权挂载点权限，**自己做不了**。
   **需要时找管理员**用 admin token 授权，或给 SK 授 register scope；前提是你有能访问团队项目的 Expo 账号。
