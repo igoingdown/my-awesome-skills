@@ -148,6 +148,20 @@ Tipsy 后端的「告警即代码 / 看板推送 / 阈值校准」操作 skill�
 
 使用说明：[skills/logfire-ops/README.md](skills/logfire-ops/README.md)
 
+### Meego Workitem Query
+
+经 tool-bridge 网关的 `mcp/meego` 查询飞书项目(Meego)工作项（**全部知识来自逐条实测**）：
+- 按人/时间/角色筛需求和缺陷（"我本周要关注什么"一条命令：`scripts/my_focus.sh <姓名> [天数]`）
+- MQL 实测铁律：FROM 用 project_key、字段 label 因工作项类型而异（需求=`名称`/缺陷=`缺陷名称`）、userkey 用 `<id:xxx>`、参与人并集覆盖全部角色
+- 返回体三层嵌套解析（围栏→JSON字符串→尾部拼 log_id），`scripts/parse_meego.py` 已封装
+- 状态/ID/角色成员走 `get_workitem_brief`（权威源）；加评论需数字 ID 且署名为固定挂载身份
+- 敏感配置（网关 SK / project_key / 空间名）全部走仓库外 secrets 文件
+
+使用示例：在 Claude Code 里说
+> "查一下我本周要关注的 Meego 需求和 bug" / "这个 bug 什么状态" / "给这个工作项加条评论"
+
+使用说明：[skills/meego-workitem-query/SKILL.md](skills/meego-workitem-query/SKILL.md)
+
 ### Bug Triage Loop
 
 个人 AI **Bug Triage Agent**：用 `/loop` 每 N 分钟拉一次飞书 Bug 群消息，判定 → 定位 → 生成 review markdown 让你 approve，严格串行、单人操作、零部署（只用 Claude Code + `lark-cli` + 你项目已有的 oncall/debug skill 或 MCP）：
