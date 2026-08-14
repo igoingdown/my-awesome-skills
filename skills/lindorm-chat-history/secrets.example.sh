@@ -29,13 +29,16 @@ export LINDORM_CHAT_INDEX="your_chat_history_index_name"
 # ============================================================================
 # 可选：tool-bridge 网关后端（--backend tool-bridge）
 # ----------------------------------------------------------------------------
-# lindorm 直连是默认后端，以下仅在你想经团队 tool-bridge 网关查询时才需要。
-# 拿 SK：浏览器开 $TB_BASE_URL/login 走企业飞书 OAuth，回调页一次性显示 SK+BaseURL。
+# lindorm 直连是默认后端，以下仅在你想经自己的 tool-bridge 网关查询时才需要。
+# 拿 SK：浏览器开 $TB_BASE_URL/login 走 OAuth，回调页一次性显示 SK+BaseURL。
 # 详见本 skill 目录的 TUTORIAL.md。
+# 工具节点路径因网关部署而异——先用 tb_probe.sh 实测你网关上的真实工具名，再填下面几项。
 # ============================================================================
-# export TB_BASE_URL="https://tool-bridge.fantacy.live"
-# export TB_SK=""   # 90 天有效，再次登录会 rotate 旧 key；勿提交进任何仓库
+# export TB_BASE_URL="https://your-tool-bridge.example.com"
+# export TB_SK=""   # 登录换取，有有效期；再次登录会 rotate 旧 key；勿提交进任何仓库
 
-# --- 可选：TB 上聊天工具的真实节点路径（2026-08-06 实测的默认值，一般无需覆盖）---
-# export LINDORM_TB_REVID_TOOL="mcp/tipsy/tipsy-analytics__chatsearch_rev_user_id"
-# export LINDORM_TB_COUNT_TOOL="mcp/tipsy/tipsy-analytics__chatsearch_count"
+# --- 可选：TB 上聊天工具的节点路径（用 tb_probe.sh 实测后填你网关上的真实值）---
+# export LINDORM_TB_REVID_TOOL="<your-gateway>/<rev_user_id 检索工具节点路径>"
+# export LINDORM_TB_COUNT_TOOL="<your-gateway>/<count 工具节点路径>"
+# export LINDORM_TB_QUERY_TOOL="<your-gateway>/<宽表 SQL 查询工具节点路径>"
+# export LINDORM_TB_DEFAULT_TABLE="<你的默认宽表名>"   # 也可用 --index 覆盖
