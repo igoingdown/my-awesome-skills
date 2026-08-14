@@ -36,13 +36,26 @@ description: 查询 OpenRouter 账户余额（总额度、已使用、剩余额�
 
 > 运行 openrouter-balance skill
 
+### 首次安装（编译 TypeScript）
+
+`dist/` 是编译产物，不进仓库（在 `.gitignore` 里）。clone / sync 之后**首次使用前必须先编译一次**，否则下面的 `node dist/check.js` 会因找不到文件而失败：
+
+```bash
+cd ~/.agents/skills/openrouter-balance
+npm install && npm run build      # tsc → dist/check.js
+```
+
 ### 手动执行脚本
 
 ```bash
+# 已编译过后可直接跑（等价于 npm start）：
 node ~/.agents/skills/openrouter-balance/dist/check.js
 ```
 
 ## 定时执行示例
+
+> 前提：已按上面「首次安装」编译出 `dist/`。定时任务也可直接调用仓库内的 `run.sh`
+> （它会 `cd` 到 skill 目录并补好 Homebrew 的 node 路径后再跑 `dist/check.js`）。
 
 ### 每小时执行（macOS - launchd）
 

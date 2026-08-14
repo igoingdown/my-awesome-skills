@@ -7,7 +7,7 @@
 # 配置: MEEGO_PROJECT_KEY 必填（secrets.sh 或 env）；TB_BASE_URL/TB_SK 由 tb_call.sh 读取。
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-TB="bash $HERE/../../lindorm-chat-history/tb_call.sh"
+TB="bash $HERE/../tb_call.sh"
 PARSE="python3 $HERE/parse_meego.py"
 SECRETS_FILE="${SECRETS_FILE:-$HOME/github/my_dot_files/secrets.sh}"
 die(){ echo "ERROR: $*" >&2; exit 1; }
@@ -38,4 +38,4 @@ echo "===== 缺陷：近 ${DAYS} 天有更新 + 参与人含目标用户 ====="
 $TB call mcp/meego/search_by_mql "$(mkargs "SELECT \`缺陷名称\`, \`优先级\`, \`影响程度\`, \`更新时间\` FROM \`$PK\`.\`缺陷\` WHERE RELATIVE_DATETIME_BETWEEN(\`更新时间\`, 'past', '${DAYS}d') AND array_contains(all_participate_persons(), '<id:$UKEY>') ORDER BY \`更新时间\` DESC LIMIT 50")" | $PARSE rows
 
 echo
-echo "（缺陷的状态/ID/负责人：bash $HERE/../../lindorm-chat-history/tb_call.sh call mcp/meego/get_workitem_brief '{\"project_key\":\"$PK\",\"work_item_type_key\":\"issue\",\"name\":\"<标题>\"}'）" >&2
+echo "（缺陷的状态/ID/负责人：bash $HERE/../tb_call.sh call mcp/meego/get_workitem_brief '{\"project_key\":\"$PK\",\"work_item_type_key\":\"issue\",\"name\":\"<标题>\"}'）" >&2

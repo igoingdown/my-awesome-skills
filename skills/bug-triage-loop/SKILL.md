@@ -34,7 +34,7 @@ Step 0  加载配置 + 读 3 个 prompt 文件
 Step 1  判断静默时段(22:00-08:00 Asia/Shanghai)→ is_quiet flag
 Step 2  串行门禁:review-queue.jsonl 尾部是否 pending_review?若是 → 退出
 Step 3  拿 processed.jsonl 已处理 message_id 集合 P
-Step 4  用 lark-im skill 拉群历史(首次 60 天,后续从上次最新 processed_at)
+Step 4  用 lark-im skill 拉群历史(首次回拉 config 的 history_backfill_days 天,后续从上次最新 processed_at)
 Step 5  过滤:message_id ∉ P,时间新→旧倒序,取第一条
         └─ 无新消息 → 追加 state/loop.log,退出
 Step 6  按 triage.md 判定 + 抽取(LLM 自己判,不用外部工具)
@@ -61,7 +61,7 @@ Step 13 清理 worktree + 退出。用户 review 后回复 approve/reject/defer,
 - `bug_chat_id`(必)
 - `my_open_id`(必)
 - `github_root`(必,如 `/Users/<username>/github`)
-- `history_backfill_days`(默认 60)
+- `history_backfill_days`(默认 7,以 config.md 为准)
 - `quiet_hours`(默认 22:00-08:00)
 - `workflow_min_evidence_sources`(默认 3)
 
@@ -97,7 +97,7 @@ jq -r '.message_id' state/processed.jsonl 2>/dev/null | sort -u > /tmp/bug-triag
 使用 lark-im skill 的 `+chats-messages-get` 命令,
 参数:
 - chat_id = <bug_chat_id from config>
-- 时间范围:首次 = 现在-60 天到现在;后续 = 上次最新 processed_at 到现在
+- 时间范围:首次 = 现在 - history_backfill_days 天到现在(config 默认 7);后续 = 上次最新 processed_at 到现在
 - 输出 NDJSON
 ```
 

@@ -9,9 +9,9 @@ description: 经 tool-bridge 网关的 mcp/meego 查询飞书项目(Meego)工作
 
 ## 前置
 
-- tool-bridge SK 已配（`TB_BASE_URL`/`TB_SK` 在 secrets.sh，见 lindorm-chat-history 的 TUTORIAL）。
+- tool-bridge SK 已配（`TB_BASE_URL`/`TB_SK` 在 secrets.sh）。换取 SK 的步骤见 `secrets.example.sh`（浏览器登录 `$TB_BASE_URL/login`）。
 - 本 skill 的空间配置在 secrets.sh（`MEEGO_PROJECT_KEY`/`MEEGO_PROJECT_SIMPLE_NAME`，见 `secrets.example.sh`）。
-- 调用器复用 `../lindorm-chat-history/tb_call.sh`（纯 curl，无额外依赖）。
+- 通用调用器 `tb_call.sh` 随本 skill 自带（纯 curl，无额外依赖），不依赖其它 skill 目录。
 
 ## 两个入口，身份模型完全不同（先搞清再用）
 
@@ -33,7 +33,7 @@ description: 经 tool-bridge 网关的 mcp/meego 查询飞书项目(Meego)工作
 ### 1. 反查任意人的 user_key
 
 ```bash
-TB="bash ../lindorm-chat-history/tb_call.sh"
+TB="bash tb_call.sh"
 $TB call mcp/meego/search_user_info '{"project_key":"'$MEEGO_PROJECT_KEY'","user_keys":["<中文姓名>"]}'
 # 返回 user_key / name_cn / lark_user_id。姓名、邮箱、user_key 都能当查询键。
 ```
