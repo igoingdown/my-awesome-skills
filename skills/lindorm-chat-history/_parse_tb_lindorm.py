@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""解析 tb_call.sh 对 tipsy lindorm_query 的返回。
+"""解析 tb_call.sh 对宽表 SQL 查询工具的返回。
 
 返回形态：外层 ```json 围栏，内是一个 JSON 字符串，字符串体是带 markdown 表格的文本：
   "**Lindorm 查询结果:** `<回显的SQL>`\n\n返回 **N** 行 ...\n| col | col |\n| --- | --- |\n| v | v |..."

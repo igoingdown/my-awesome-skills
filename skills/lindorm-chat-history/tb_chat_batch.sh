@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 批量拉多个 UID 的聊天原文（经 tool-bridge 宽表 lindorm_query，含 sender_type），落本机。
-# 严格【串行】+ UID 间限速——绝不并发（devbox 纪律：tipsy 单容器 + 共享 Lindorm 扛不住 fan-out）。
+# 批量拉多个 UID 的聊天原文（经 tool-bridge 宽表 SQL 查询，含 sender_type），落本机。
+# 严格【串行】+ UID 间限速——绝不并发（devbox 纪律：网关单容器 + 共享 Lindorm 扛不住 fan-out）。
 #
 # 用法:
 #   bash tb_chat_batch.sh --uids "u1,u2,..." [选项]
@@ -8,9 +8,9 @@
 # 选项:
 #   --size <n>        每个 UID 取近期 n 条（默认 1000）
 #   --reversed        传入的已是 rev_user_id（含负数）；否则按 user_id 反转
-#   --index <table>   宽表名（chat_history/chat_history_rich/chat_conversation_history，默认 chat_history）
+#   --index <table>   宽表名（默认取 env LINDORM_TB_DEFAULT_TABLE）
 #   --outdir <dir>    输出目录（默认 ./tb_chat_out），每个 UID 一个 <uid>.jsonl
-#   --sleep <sec>     UID 之间的间隔秒数（默认 1，限速护 devbox）
+#   --sleep <sec>     UID 之间的间隔秒数（默认 1，限速护共享 devbox）
 #   --secrets <path>  透传给 query_chat_history.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

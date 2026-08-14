@@ -165,6 +165,24 @@ Tipsy 后端的「告警即代码 / 看板推送 / 阈值校准」操作 skill�
 
 使用说明：[skills/bug-triage-loop/README.md](skills/bug-triage-loop/README.md)
 
+### Lindorm Chat History
+
+按 UID 从 Lindorm（LindormSearch / ES 兼容）聊天记录索引里拉用户聊天原文，适配不同部署：
+- 支持 UID 反转存储（`rev_user_id`）、`_source` 关闭时走 `docvalue_fields`、`search_after` 翻页导出
+- 两种后端：lindorm 直连（默认）或经 tool-bridge 网关走宽表 SQL（含 `sender_type` 真值）
+- 索引名 / 字段名 / 网关工具路径全部走仓库外 secrets 文件注入，真实内部命名不进仓库
+
+使用说明：[skills/lindorm-chat-history/SKILL.md](skills/lindorm-chat-history/SKILL.md)
+
+### Meego Workitem Query
+
+经 tool-bridge 网关查询飞书项目（Meego）工作项：
+- 按人 / 时间 / 角色筛需求和缺陷，查状态详情，加评论
+- MQL 实测铁律（FROM 用 project_key、字段 label 因工作项类型而异、参与人并集覆盖全角色）
+- 空间配置（project_key / simple_name）与网关凭据全部走仓库外 secrets 文件
+
+使用说明：[skills/meego-workitem-query/SKILL.md](skills/meego-workitem-query/SKILL.md)
+
 ## License
 
 MIT

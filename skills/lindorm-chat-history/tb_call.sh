@@ -13,7 +13,7 @@ if [[ -z "${TB_SK:-}" || -z "${TB_BASE_URL:-}" ]]; then
   [[ -f "$SECRETS_FILE" ]] && { set +u; # shellcheck disable=SC1090
     source "$SECRETS_FILE"; set -u; }
 fi
-: "${TB_BASE_URL:?缺少 TB_BASE_URL（放 secrets.sh；生产实例 https://tool-bridge.fantacy.live）}"
+: "${TB_BASE_URL:?缺少 TB_BASE_URL（你的 tool-bridge 网关地址，放 secrets.sh）}"
 : "${TB_SK:?缺少 TB_SK：先浏览器登录 \$TB_BASE_URL/login 拿 key，见 TUTORIAL.md}"
 command -v curl >/dev/null || { echo "需要 curl" >&2; exit 1; }
 BASE="${TB_BASE_URL%/}"

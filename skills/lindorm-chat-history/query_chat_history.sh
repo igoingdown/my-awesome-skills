@@ -25,8 +25,8 @@
 #     --count                  只输出命中总数
 #     --export <file>          翻页导出全部命中到 JSONL 文件(search_after)
 #     --raw                    直接输出后端原始 JSON（不做 jq 美化）
-#     --backend <name>         lindorm(默认，ES 直连) | tool-bridge(经 TB 网关走宽表 lindorm_query，含 sender_type)
-#                              TB 后端下 --index 表示【宽表名】(chat_history/chat_history_rich/chat_conversation_history)，非 ES 索引全名
+#     --backend <name>         lindorm(默认，ES 直连) | tool-bridge(经 TB 网关走宽表 SQL 查询，含 sender_type)
+#                              TB 后端下 --index 表示【宽表名】(见 secrets 里 LINDORM_TB_* 配置)，非 ES 索引全名
 #     --secrets <path>         指定 secrets 文件，默认 ~/github/my_dot_files/secrets.sh
 #   环境变量: SECRETS_FILE 同 --secrets；LINDORM_BACKEND 同 --backend
 set -euo pipefail
@@ -66,15 +66,19 @@ done
 [[ "$BACKEND" == "lindorm" || "$BACKEND" == "tool-bridge" ]] || die "未知 backend: $BACKEND（可用: lindorm | tool-bridge）"
 
 [[ -n "$UID_IN" ]] || die "缺少 UID。用法: $0 <uid> [选项]，见 --help"
-# UID 允许负号：宽表 rev_user_id 是 BIGINT，实测存在负值（如 -9223219043268000945）。
+# UID 允许负号：宽表 rev_user_id 是 BIGINT，反转后可能是负值。
 [[ "$UID_IN" =~ ^-?[0-9]+$ ]] || die "UID 必须是（可带负号的）十进制整数: $UID_IN"
 
-# 凭据/配置：优先用已注入的 env，否则 source secrets 文件（只引用键名，不回显值）
+# 凭据/配置：优先用已注入的 env，否则 source secrets 文件（只引用键名，不回显值）。
+# 注意不能只看「连接凭据」在不在——索引名/工具路径等配置可能是后来才加进 secrets 的，
+# 环境里有旧凭据不代表配置齐了。缺任何一项都触发 source。
 need_source=0
 if [[ "$BACKEND" == "lindorm" ]]; then
   [[ -z "${LINDORM_ENDPOINT_URL:-}" || -z "${LINDORM_USER:-}" || -z "${LINDORM_PASSWORD:-}" ]] && need_source=1
+  [[ -z "$INDEX_OVERRIDE" && -z "${LINDORM_CHAT_INDEX:-}" ]] && need_source=1
 else
   [[ -z "${TB_SK:-}" || -z "${TB_BASE_URL:-}" ]] && need_source=1
+  [[ -z "${LINDORM_TB_REVID_TOOL:-}" || -z "${LINDORM_TB_COUNT_TOOL:-}" || -z "${LINDORM_TB_QUERY_TOOL:-}" ]] && need_source=1
 fi
 if [[ $need_source -eq 1 ]]; then
   [[ -f "$SECRETS_FILE" ]] || die "找不到 secrets 文件: $SECRETS_FILE（参考 secrets.example.sh）"
@@ -97,11 +101,12 @@ if [[ "$BACKEND" == "lindorm" ]]; then
   : "${LINDORM_PASSWORD:?secrets 缺少 LINDORM_PASSWORD}"
   [[ -n "$IDX" ]] || die "secrets 缺少 LINDORM_CHAT_INDEX（索引名），或用 --index 指定"
 else
-  # tool-bridge 后端：凭据 + 工具名映射（2026-08-06 经 tb_probe.sh 实测确认的真实节点路径）
-  : "${TB_BASE_URL:?secrets 缺少 TB_BASE_URL（生产实例 https://tool-bridge.fantacy.live）}"
+  # tool-bridge 后端：凭据 + 工具名映射。真实节点路径放本地 secrets（不进仓库），
+  # 用 tb_probe.sh 实测你网关上的真实工具名后填 LINDORM_TB_* 变量，见 secrets.example.sh。
+  : "${TB_BASE_URL:?secrets 缺少 TB_BASE_URL（你的 tool-bridge 网关地址，放本地 secrets）}"
   : "${TB_SK:?secrets 缺少 TB_SK：先浏览器登录 \$TB_BASE_URL/login 拿 key，见 TUTORIAL.md}"
-  TB_REVID_TOOL="${LINDORM_TB_REVID_TOOL:-mcp/tipsy/tipsy-analytics__chatsearch_rev_user_id}"
-  TB_COUNT_TOOL="${LINDORM_TB_COUNT_TOOL:-mcp/tipsy/tipsy-analytics__chatsearch_count}"
+  TB_REVID_TOOL="${LINDORM_TB_REVID_TOOL:?secrets 缺少 LINDORM_TB_REVID_TOOL（你网关上 rev_user_id 检索工具的节点路径）}"
+  TB_COUNT_TOOL="${LINDORM_TB_COUNT_TOOL:?secrets 缺少 LINDORM_TB_COUNT_TOOL（你网关上 count 工具的节点路径）}"
 fi
 
 command -v curl >/dev/null || die "需要 curl"
@@ -117,26 +122,27 @@ else
 fi
 
 if [[ "$BACKEND" == "tool-bridge" ]]; then
-  # ── tool-bridge 后端（2026-08-06 实测：两套引擎，别混）─────────────────
-  #   搜索侧 chatsearch_*（ES）：只 count/聚合，禁正文，且索引【无 sender_type】字段。
-  #   宽表侧 lindorm_query（SQL）：可 SELECT content + sender_type 真值(1/2)，是拿原文的正路。
-  # 因此：--count 走 chatsearch_count（快）；page/export（要原文+角色）走 lindorm_query。
+  # ── tool-bridge 后端（两套引擎，别混）─────────────────
+  #   搜索侧计数/聚合工具（ES）：只 count/聚合，禁正文，且索引【无 sender_type】字段。
+  #   宽表侧 SQL 查询工具：可 SELECT content + sender_type 真值(1/2)，是拿原文的正路。
+  # 因此：--count 走计数工具（快）；page/export（要原文+角色）走宽表 SQL 查询工具。
   # 坑（都踩过，代码已应对）：
-  #   1) tipsy 单 MCP 容器会【偶发串台】——返回别的请求结果。每次必须核对回显 SQL==发出的 SQL，不符即重试。
-  #   2) lindorm_query 返回 markdown 表格且【只展示前 50 行】，故分页 LIMIT<=50 + OFFSET，逐页拼。
+  #   1) 单 MCP 容器会【偶发串台】——返回别的请求结果。每次必须核对回显 SQL==发出的 SQL，不符即重试。
+  #   2) 宽表 SQL 查询返回 markdown 表格且【只展示前 50 行】，故分页 LIMIT<=50 + OFFSET，逐页拼。
   #   3) 宽表引擎 9 秒硬超时——只做带 WHERE rev_user_id 的分区点查，禁全表 GROUP BY/DISTINCT/无过滤 ORDER BY。
-  #   4) export_result 落网关容器侧、拿不回本机，故不用它；直接解析返回的表格落本机 JSONL。
+  #   4) 网关侧 export_result 落容器侧、拿不回本机，故不用它；直接解析返回的表格落本机 JSONL。
   TBC="bash $HERE/tb_call.sh"
-  TB_QUERY_TOOL="${LINDORM_TB_QUERY_TOOL:-mcp/tipsy/tipsy-analytics__lindorm_query}"
-  # 宽表名（非搜索索引全名）：chat_history / chat_history_rich / chat_conversation_history
-  TB_TABLE="${INDEX_OVERRIDE:-${LINDORM_TB_TABLE:-chat_history}}"
+  TB_QUERY_TOOL="${LINDORM_TB_QUERY_TOOL:?secrets 缺少 LINDORM_TB_QUERY_TOOL（你网关上宽表 SQL 查询工具的节点路径）}"
+  # 宽表名（非搜索索引全名）：由 --index 或 LINDORM_TB_TABLE 指定；默认取 env LINDORM_TB_DEFAULT_TABLE。
+  # 带 conversation/rich 特征的表名会触发列集差异（见下），命名以你自己的宽表为准。
+  TB_TABLE="${INDEX_OVERRIDE:-${LINDORM_TB_TABLE:-${LINDORM_TB_DEFAULT_TABLE:?secrets 缺少 LINDORM_TB_DEFAULT_TABLE（默认宽表名），或用 --index 指定}}}"
   PAGE_MAX=50; RETRY=3
   # 用户字段：*_rich 表用 user_id 原值，其余用 rev_user_id（REV）
   if [[ "$TB_TABLE" == *rich* ]]; then UF="user_id"; UV="$UID_IN"; else UF="$USER_FIELD"; UV="$REV"; fi
   echo "[backend=tool-bridge] table=$TB_TABLE  $UF=$UV  mode=$MODE" >&2
 
   if [[ "$MODE" == "count" ]]; then
-    # count 用宽表点查（分区内 COUNT，安全）；也可用 chatsearch_count，但这里统一走宽表口径。
+    # count 用宽表点查（分区内 COUNT，安全）；也可用搜索侧计数工具，但这里统一走宽表口径。
     sql="SELECT COUNT(*) AS c FROM $TB_TABLE WHERE $UF=$UV"
     for t in $(seq 1 $RETRY); do
       resp="$($TBC call "$TB_QUERY_TOOL" "{\"sql\":\"$sql\"}" 2>&1 || true)"
@@ -147,9 +153,9 @@ if [[ "$BACKEND" == "tool-bridge" ]]; then
     exit 0
   fi
 
-  # page / export：lindorm_query 分页取原文 + sender_type，落本机
+  # page / export：宽表 SQL 查询分页取原文 + sender_type，落本机
   # 排序用 sequence DESC 取“近期”；SELECT 列顺序与 _parse_tb_lindorm.py 约定一致。
-  cols="character_id,sequence,sender_type,timestamp,content"
+  cols="${LINDORM_TB_COLS:-character_id,sequence,sender_type,timestamp,content}"
   [[ "$TB_TABLE" == *conversation* || "$TB_TABLE" == *rich* ]] && cols="conversation_id,$cols"
   want=$SIZE; [[ "$MODE" == "export" ]] && want=100000
   OUT="${EXPORT_FILE:-/dev/stdout}"
