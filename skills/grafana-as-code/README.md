@@ -19,7 +19,7 @@
 2. **凭证**:`~/github/my_dot_files/secrets.sh` 须导出 `GRAFANA_URL` / `GRAFANA_TOKEN`
    (见 [`secrets.example.sh`](secrets.example.sh))。skill 运行时 `source` 它注入 env,
    **token 绝不落盘**。
-3. **依赖**:`python3` + `pyyaml>=6.0`(generate/push 脚本用)。
+3. **依赖**:`python3` + `httpx`(本 skill 自带的 `push_dashboard.py` 用) + `pyyaml>=6.0`(tipsy-backend `deploy/grafana` 的 generate/push 脚本用)。`install.sh` 会逐个体检并按需安装。
 
 ## 安装
 

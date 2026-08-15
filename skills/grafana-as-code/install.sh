@@ -3,7 +3,7 @@
 #
 # 作用：把本 skill 安装到 ~/.claude/skills/grafana-as-code/，并做依赖/凭证体检：
 #   - skill 本体：     ~/.claude/skills/grafana-as-code/
-#   - 运行依赖：       python3 + pyyaml（deploy/grafana 的 generate/push 脚本要用）
+#   - 运行依赖：       python3 + httpx（本 skill 的 push_dashboard.py 用）+ pyyaml（deploy/grafana 的 generate/push 脚本用）
 #   - 凭证源：         ~/github/my_dot_files/secrets.sh 须导出 GRAFANA_URL / GRAFANA_TOKEN
 #
 # 注：本脚本只管 Claude Code。仓库根目录的 sync.sh 会把所有 skill 同步到
@@ -133,6 +133,25 @@ check_runtime_deps() {
         fi
       else
         info "(dry-run) 会尝试：python3 -m pip install 'pyyaml>=6.0'"
+      fi
+    fi
+  fi
+
+  # 3. httpx（本 skill 自带的 scripts/push_dashboard.py 需要 import httpx）
+  if command -v python3 &>/dev/null; then
+    if python3 -c "import httpx" 2>/dev/null; then
+      success "httpx: 已安装"
+    else
+      warn "缺少 httpx（scripts/push_dashboard.py 需 import httpx）"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        info "尝试安装：python3 -m pip install httpx"
+        if python3 -m pip install httpx 2>/dev/null; then
+          success "httpx 安装成功"
+        else
+          warn "自动安装失败，请手动执行：python3 -m pip install httpx"
+        fi
+      else
+        info "(dry-run) 会尝试：python3 -m pip install httpx"
       fi
     fi
   fi
