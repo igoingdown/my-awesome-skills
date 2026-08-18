@@ -118,7 +118,13 @@ elif [[ "$UID_IN" == -* ]]; then
   # 负值不可能是某个 user_id 的十进制反转结果，它本身就是存储侧的 rev_user_id。
   die "UID 是负数（$UID_IN）——这已是存储侧 rev_user_id，请加 --reversed 跳过反转。"
 else
-  REV="$(printf '%s' "$UID_IN" | rev)"
+  rev_dec="$(printf '%s' "$UID_IN" | rev)"   # 十进制字符串整体倒序
+  # 存储侧存的是 int64(ReverseUint64(uid))：反转后的十进制若 > INT64_MAX（约 7.7% 的 UID），
+  # 要按有符号 64 位补码回绕成负 BIGINT。bash 是 64 位有符号运算，$(( 10# )) 正好复刻这个回绕
+  # （同时去掉反转产生的前导零）。不回绕的话 rev_user_id 为 BIGINT 的宽表会报
+  # "Can't convert to BIGINT. Overflow"，被 -e/tb_call 吞成失败(n=-1)，整批悄悄漏掉这些用户。
+  REV=$(( 10#$rev_dec ))
+  [[ "$REV" == -* ]] && echo "[rev 溢出回绕] $rev_dec → $REV（超出 INT64_MAX，按有符号 int64 补码回绕）" >&2
 fi
 
 if [[ "$BACKEND" == "tool-bridge" ]]; then
