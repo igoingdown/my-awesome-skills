@@ -1,6 +1,6 @@
 ---
 name: interview-comment
-description: 按团队模板生成严格的面试评价报告。使用时：①用户直接贴飞书招聘候选人链接（feishu.cn/hire/talent/...）——自动用 Chrome（优先 /chrome 集成，回退 AppleScript）截简历长图 + 抽取面试速记文字记录到 ~/github/interviews/人名拼音/00N/，再进入评估；②用户提供候选人面试材料目录（简历截图 + 语音转文字）。按固定目录结构读取，只评估本轮材料，产出 Markdown 报告。报告包含两部分：候选人五维评价（2/2.5/3/3+/3.5/4 六档评分，3+ 及以上通过，3 为合格线边缘、默认倾向不通过但面试官可显式裁定通过；按目标岗位职级校准深度期望）+ 面试官复盘评价（A/B/C/D 四档，五维评估 + 改进建议）。含 AI coding 题专项评估（看用 AI 的过程而非代码结果）与 AI 生成内容的原理归属校验；含传统算法/编程题专项评估（自动从飞书「代码考核」详情捞取题面与候选人代码原文，实跑用例验证正确性，产出 coding-analysis.md + candidate-code）。适用于后端/算法/大数据/Agent 研发岗位。
+description: 按团队模板生成严格的面试评价报告。使用时：①用户直接贴飞书招聘候选人链接（feishu.cn/hire/talent/...）——交互式会话用 Chrome 集成、无人值守/launchd 固定用 AppleScript，先按 URL 精确定位标签页并跑前置探针判定本轮材料形态（简历是 PDF/图片附件/仅标准简历、面试速记是否就绪、有无「代码考核」卡片），再采集简历（三路：PDF 长图 / 图片附件直落 / 标准简历截图）+ 抽取面试速记文字记录到 ~/github/interviews/人名拼音/00N/，速记未就绪则跳过不写残缺评价；②用户提供候选人面试材料目录（简历截图 + 语音转文字）。按固定目录结构读取，只评估本轮材料，产出 Markdown 报告。报告包含两部分：候选人五维评价（2/2.5/3/3+/3.5/4 六档评分，3+ 及以上通过，3 为合格线边缘、默认倾向不通过但面试官可显式裁定通过；按目标岗位职级校准深度期望）+ 面试官复盘评价（A/B/C/D 四档，五维评估 + 改进建议）。含 AI coding 题专项评估（看用 AI 的过程而非代码结果）与 AI 生成内容的原理归属校验；含传统算法/编程题专项评估（「代码考核」卡片存在时自动从详情捞取题面与候选人代码原文，实跑用例验证正确性，产出 coding-analysis.md + candidate-code）。适用于后端/算法/大数据/Agent 研发岗位。
 ---
 
 # Interview Comment（面试评价生成）
@@ -16,7 +16,7 @@ description: 按团队模板生成严格的面试评价报告。使用时：①�
 
 | 你要做的 | 读这份 |
 |---|---|
-| 用户只贴了飞书招聘链接，需先采集简历/速记/代码考核 | `references/material-collection.md`（阶段 0 全流程 + 代码考核采集 + 并发子代理提示）|
+| 用户只贴了飞书招聘链接，需先采集简历/速记/代码考核 | `references/material-collection.md`（阶段 0：按 URL 定位标签页 + 0.15 前置探针 + 三路简历采集 + 速记未就绪退出 + 代码考核采集 + 并发子代理提示）|
 | 给候选人五维打标 / 综合评分 / 判 AI coding 题 / 判传统算法编程题 | `references/scoring-rubric.md`（五维判据 + AI coding 专项 + 传统算法/编程题专项 + 五维→综合分映射）|
 | 做面试官复盘评价 | `references/interviewer-rubric.md`（A/B/C/D 档 + 面试官五维标准，含编码"验证收尾"红线）|
 | 写输出文件 | `references/report-templates.md`（evaluation.md / interviewer-review.md / coding-analysis.md 模板）|
@@ -121,7 +121,8 @@ description: 按团队模板生成严格的面试评价报告。使用时：①�
 
 ## 执行流程
 
-1. **（仅"贴链接"入口）采集材料**：按 `references/material-collection.md` 的阶段 0 完成简历/速记采集；**本轮有编程题时必做 0.4 从「代码考核」详情捞题面 + 代码原文 + 运行记录**，产出 `<拼音>/00N/{resume.png, asr.md[, candidate-code.<ext>, coding-analysis.md]}` 后再继续。已是材料目录则跳过。
+1. **（仅"贴链接"入口）采集材料**：按 `references/material-collection.md` 的阶段 0：0.1 按 URL 精确定位标签页 → **0.15 前置探针**判定本轮材料形态（简历 pdf/image/standard、速记 ready/not_ready、代码考核 yes/no）→ 按探针结果分支采集简历（三路）与速记，**探针 coding=yes 才走 0.4 捞题面+代码原文+运行记录**，产出 `<拼音>/00N/{resume.png, asr.md[, candidate-code.<ext>, coding-analysis.md]}` 后再继续。已是材料目录则跳过。
+   - **速记未就绪即止（硬分支）**：若探针判 `asr=not_ready`（面试未进行 / 转写未生成 / 内容明显不完整）→ **不写任何 asr.md、不产出评价**，向调用方返回 `SKIPPED: 速记未就绪` 并说明原因，让其跳过该候选人、下次再试。**绝不基于残缺或空转写脑补评价。**
 2. **定位目标轮次**：
    - 用 `Glob` 扫 `<人名>/[0-9][0-9][0-9]/` 列出所有轮次子目录
    - 含 `asr.md` 的轮次是**目标轮候选**
