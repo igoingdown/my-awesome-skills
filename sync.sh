@@ -192,3 +192,19 @@ if [[ -d "$SRC/logfire-ops" ]] && command -v claude &>/dev/null; then
     echo "    LOGFIRE_READ_TOKEN=pylf_... $SRC/logfire-ops/install.sh --mcp-only"
   fi
 fi
+
+# working-discipline is a cross-cutting discipline skill: its stable trigger
+# relies on a "## 工作纪律" section in the global CLAUDE.md that summarizes the
+# 4 hardest rules and points every session at the full SKILL.md. Skill
+# descriptions alone are unreliable triggers for always-applicable rules, so
+# verify the anchor exists and warn (never auto-edit user config) if missing.
+if [[ -d "$SRC/working-discipline" ]]; then
+  CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+  if [[ ! -f "$CLAUDE_MD" ]] || ! grep -q '^## 工作纪律' "$CLAUDE_MD"; then
+    echo ""
+    echo "⚠ working-discipline is installed but ~/.claude/CLAUDE.md has no '## 工作纪律'"
+    echo "  section. Without it, sessions won't reliably load the discipline rules."
+    echo "  Add a section that summarizes the top rules and points to:"
+    echo "    ~/.claude/skills/working-discipline/SKILL.md"
+  fi
+fi
