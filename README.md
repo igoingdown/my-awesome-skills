@@ -183,6 +183,18 @@ Tipsy 后端的「告警即代码 / 看板推送 / 阈值校准」操作 skill�
 
 使用说明：[skills/meego-workitem-query/SKILL.md](skills/meego-workitem-query/SKILL.md)
 
+## Automation Loops（自动化循环）
+
+以 `loop-` 前缀的目录是一类特殊 skill：它们不是「一次调用的能力」，而是**挂在 crontab 上无人值守运行的定时循环**，用 headless `claude -p` 从你自己的工作痕迹里做分析、并产出文档 / PR / 通知。frontmatter 里带 `metadata.kind: loop` 标记，与普通 skill 区分。
+
+这些 loop 深度依赖各自的运行环境（通知渠道、云文档 CLI、IM 素材源），仓库里提供的是**去敏后的参考实现 + 完整设计思路**：真实值全部外置到仓库之外的 `config`（每个目录有 `config.example.sh`），通知/文档/IM 层需换成你自己的工具。每个目录都带 `install.sh`（`doctor` 自检 / `init-config` 生成配置 / `install-cron` 装定时条目）。
+
+- **Skill Optimizer** — 每天分析自己的 session，把反复强调的工作方式提炼成 skill 改进、自动提 PR，合入后自动同步回运行时。一个 AI 自我进化闭环。[skills/loop-skill-optimizer/SKILL.md](skills/loop-skill-optimizer/SKILL.md)
+- **Weekly Report** — 每周一读上周所有 session，归纳成分类周报云文档并归档进索引。[skills/loop-weekly-report/SKILL.md](skills/loop-weekly-report/SKILL.md)
+- **Daily Retro** — 每天读昨天所有 session（可选叠加 IM 素材），生成「日记 + 自我改进项」并维护一篇持续累积的改进计划。[skills/loop-daily-retro/SKILL.md](skills/loop-daily-retro/SKILL.md)
+
+三者共享同一套范式：`cron + headless claude + digest 预提取 + 去敏配置外置`。
+
 ## License
 
 MIT
