@@ -27,12 +27,38 @@
 
 | MCP | 用途 | 缺了的降级路径 |
 |---|---|---|
-| `aliyun-sls` | 查生产 SLS 日志(uid 精确命中、异常路径、tag=strong_signal 的核心来源) | 走 lark-cli 转 Grafana 网页 / 让子 agent 起 curl,极慢 |
+| `aliyun-sls` | 查生产 SLS 日志(uid 精确命中、异常路径、tag=strong_signal 的核心来源) | **首选兜底:走 HTBP 网关的托管 SLS(见 1.2a),零安装零 AK/SK**;都没有才退到 lark-cli 转 Grafana 网页 / 子 agent 起 curl,极慢 |
 | `bytebase` | 查 MySQL 主表 uid 状态、订单表、character 表 (`ground_truth` 主来源) | 无 `confirmed` 报告(必须一条现网数据 ground_truth) |
 | `signoz` | trace / APM / P99 抖动 | 影响面估算精度降 |
 | `logfire` | Python 服务(memory / recsys)观测 | memory 侧根因判定慢 |
 
 MCP 是"可选但强烈推荐"。缺 MCP 时子 agent 需自己 curl / ssh 兜底,速度和证据 tag 都会降级。
+
+### 1.2a 装不了 MCP 时的托管兜底:HTBP 工具网关
+
+如果所在机器装不了 MCP server 二进制(如受管 devbox),而团队有 HTBP 协议的工具网关(自建/内部服务),
+可以只用**一把 Secret Key + BaseURL** 经网关调托管的 SLS,**不需要本机装任何东西、不需要申请阿里云 AK/SK**。
+
+调用形态:`POST <BASE_URL>/<节点>/<工具名>`,header `Authorization: Bearer <SK>`,body 即入参本体。
+先 `GET <BASE_URL>/~tree` 发现节点,再 `GET <节点>/<工具>/~help` 取入参 schema(渐进式发现,不用记 API)。
+
+**替代 `aliyun-sls` MCP 的最小可用集(经实测)**:
+
+| 网关工具 | 替代的本地能力 |
+|---|---|
+| `sls_list_projects`(传 `regionId`) | 枚举 project,替代手抄 `SLS_PROJECT` |
+| `sls_list_logstores`(传 `regionId`+`project`) | 枚举 logstore,单次最多返回 10 个,多了要传关键词过滤 |
+| `sls_execute_sql` | **主力**:全文检索 + SQL 聚合分析,能拉日志原文,替代 `mcp__aliyun-sls__*` 的查询职能 |
+
+**实测坑(不知道会直接调不通)**:
+1. 参数名是**驼峰 `logStore`**,写 snake_case `logstore` 报 `Field required`。
+2. 相对时间只认**单段式** `now` / `now-30m` / `now-1h` / `now-1d`;`now-24h-30m` 报"无效的相对时间格式"。
+3. **没有 `env` 参数**,区分生产/测试**靠 `regionId` + `project` 组合**(和本地 MCP 的 env 开关不同)——搞错了表现为"查询无结果",极易误判成日志没采集。查不到先用 `sls_list_logstores` 确认该 region 有这个库。
+4. `limit` **硬上限 100**(本地 MCP 可到 1000)。要更多条只能收窄时间窗分批,别指望单次拉全。
+5. 大库上的时间窗对比类工具(`sls_log_compare`)常 `ExecutionTimeout`;自然语言转查询(`sls_text_to_sql`/`sls_text_to_spl`/`sls_sop`)与 CMS 工作空间系(`sls_execute_spl`)在实测环境**全部不可用**(上游 400/503 或缺 `cms:GetEntityStoreData` 权限)。**只依赖上表那 3 个工具**,别把降级路径建在其余工具上。
+
+拿 SK 的方式取决于网关配置(常见是浏览器走企业 SSO 的 `/login` 回调页一次性显示,有有效期、重登会 rotate)。
+SK 存 `~/github/my_dot_files/secrets.sh`(见 §2.2),**不要提交进任何仓库**。
 
 ### 1.3 子 Skill(Claude Code 里必须能被 `Skill` 工具索引到)
 
@@ -60,6 +86,7 @@ MCP 是"可选但强烈推荐"。缺 MCP 时子 agent 需自己 curl / ssh 兜�
 | `lark-cli` user access token | user 身份(拉群历史必须 user) | `~/.lark-cli/cache/` | `lark-cli auth login --domain all` OAuth 后写入 |
 | `ALIYUN_SLS_AK_ID` + `ALIYUN_SLS_AK_SECRET` | aliyun-sls MCP 查生产日志 | `~/github/my_dot_files/secrets.sh` 里 `export` | 阿里云 RAM 子账号,自己去 RAM 控制台建 |
 | `ALIYUN_SLS_ENDPOINT` / `SLS_PROJECT` / `LOGSTORE` | 日志库定位 | 同上 | 阿里云 SLS 控制台复制 |
+| (二选一)HTBP 网关 `<GW>_BASE_URL` + `<GW>_SK` | **替代上面两行**:装不了 MCP 时经网关查托管 SLS(见 §1.2a) | 同上 | 网关 `/login` 走企业 SSO,回调页一次性显示;有有效期,重登会 rotate |
 | `<PROJECT>_BYTEBASE_URL` + bytebase token | bytebase MCP 查 MySQL | 同上(URL 里带 token) | bytebase 后台建 personal token |
 | `ALIYUN_DMS_LINDORM_URL_*` | Lindorm(聊天历史)DMS 网关 | 同上 | 阿里云 DMS 后台生成 |
 | `ALIYUN_DMS_ES_URL_PROD` + `ES_USERNAME/PASSWORD` | ES 直查 | 同上 | 阿里云 ES 控制台 |
