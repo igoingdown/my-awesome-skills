@@ -50,3 +50,12 @@ Use `blocked` only when:
 - the same blocker has failed after 3 concrete attempts;
 - each attempt is recorded in `blockers.md`;
 - no meaningful progress is possible without user input or external state change.
+
+## Status Hygiene
+
+The task list is user-visible. Every entry's status is a claim the user reads and acts on, and stale entries get challenged: "are these two really still running? why are they hanging?", "why does it still show one task open?" (asked twice, because the first answer fixed nothing), "is that task still alive? is it doing anything?".
+
+- Mark `done` in the same turn the verification passes. Do not batch status updates to the end of the session — a task whose work shipped hours ago but still displays open reads as either unfinished work or a lie.
+- An `in_progress` entry must map to a live worker (subagent, workflow, background process) that is actually producing output. When the worker finishes or dies, reconcile immediately: `done`/`done_with_concerns` if its output was accepted, `pending` or `blocked` otherwise. Never leave a zombie `in_progress`.
+- On resume after compaction or interruption, reconcile the whole list against `state.md` and actual artifacts before continuing. Completions from just before the break are the ones most often left unmarked.
+- When the user questions a status, verify against evidence (worker attached, artifact growth, last output time) and correct the list in the same reply. Answering the question while leaving the stale display in place is the observed failure — the user has to ask again.
