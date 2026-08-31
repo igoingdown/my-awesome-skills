@@ -23,7 +23,7 @@ description: 拉飞书 Bug 群的新消息(含最近 N 天历史)按新→旧倒
 | 拉群历史消息 | `lark-im` | `+chats-messages-get`(通过 Skill 工具唤起) |
 | 发飞书私聊推送 | `lark-im` | `+messages-send` |
 | 查 open_id / 姓名 | `lark-contact` | `+search-user` / `+get-user` |
-| 查 SLS/DB/memory 等生产数据 | 项目侧 oncall / debug skill(如 `<project>-debug`),或直接用 aliyun-sls / bytebase / signoz MCP | 按各自 skill 或 MCP 文档 |
+| 查 SLS/DB/memory 等生产数据 | 项目侧 oncall / debug skill(如 `<project>-debug`),或直接用 aliyun-sls / bytebase / signoz MCP;装不了 MCP 时走 HTBP 网关托管 SLS(见 INSTALL.md §1.2a) | 按各自 skill 或 MCP 文档 |
 | 定位代码 | 项目侧 code-analyze skill(如 `bug-analyze`),或让主 loop 自己 Read + grep | — |
 | lark-cli 权限/身份问题 | `lark-shared` | 参考它的 auth 章节 |
 
@@ -275,7 +275,7 @@ phase('并行定位')
 const sources = [
   {
     key: 'sls',
-    prompt: `使用项目侧 oncall/debug skill(或直接调 aliyun-sls MCP)从 SLS 查 uid=${bug.affected_uid} 最近 30 分钟 ${bug.keywords.join('/')} 相关日志。上下文: ${JSON.stringify(bug)}。只返回 <=5 条关键日志片段 JSON。`,
+    prompt: `使用项目侧 oncall/debug skill(或直接调 aliyun-sls MCP;装不了 MCP 就走 HTBP 网关的 sls_execute_sql,注意驼峰 logStore、时间只认 now-30m 单段式、limit<=100)从 SLS 查 uid=${bug.affected_uid} 最近 30 分钟 ${bug.keywords.join('/')} 相关日志。上下文: ${JSON.stringify(bug)}。只返回 <=5 条关键日志片段 JSON。`,
   },
   {
     key: 'db',
@@ -477,6 +477,7 @@ open('state/review-queue.jsonl', 'w').writelines(lines)
 - **Read/Write 断** → 用 `Bash + heredoc` 或 `python3 -c` 落文件(功能等价,通道不同)
 - **bytebase `query_database` 断** → 换 `call_api` 显式全路径(operationId=SQLService/Query + name=instances/<inst>/databases/<db>),这条通路和高层 API 走不同代码路径
 - **aliyun-sls 某 region 断** → 换其他 region;若 query 语法(短语精确匹配)返回 0 而全文关键字有,换用宽松关键字
+- **aliyun-sls MCP 整个不可用/装不上** → 换 HTBP 网关的 `sls_execute_sql`(见 INSTALL.md §1.2a),**这是换通道不是降级**,证据 tag 不必降;但网关侧 `limit` 上限 100,需要更多条时收窄时间窗分批取
 - **签署 3 次全断** → 该证据源标 tag=`tool_failure`,**不作为 absence signal 使用**;报告里显式列出"因工具不可用未验证"
 
 > **取数遇阻 / 要动数据时，先读 `references/investigation-discipline.md`。** 那里有成体系的降级与门禁（本段不再内联）：bytebase 授权断链降级序列、主数据存储捞不到时的换源降级（离线镜像/日志重构/代执行/本地等价实例）、生产 DB 访问纪律（读带 LIMIT、写走工单、测试库写前回显自证）、跨存储脏数据清理完整性门禁、批量清理"选中依据"门禁、大体量数据先落盘、日志抽取正则安全、SLS 重建 session 手法。**动 DB / 清数据 / 大范围正则前必读对应条目。**
