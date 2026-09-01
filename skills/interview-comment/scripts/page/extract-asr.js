@@ -3,16 +3,7 @@
 // 选择器策略：文本/结构锚点优先，哈希化 class 仅作辅助（class 会随飞书版本失效）。
 // 返回 JSON：{ ok:true, count, speakers:[...], items:[{speaker, time, text}] }  或  { ok:false, reason }
 
-// 1) 点开「面试速记」入口（文本锚点优先，class 辅助）
-let entry = Array.from(document.querySelectorAll("*"))
-  .find(e => e.children.length === 0 && (e.textContent || "").trim() === "面试速记");
-if (!entry) entry = Array.from(document.querySelectorAll("[class*=minutes]"))
-  .find(e => (e.textContent || "").trim() === "面试速记");
-if (!entry) return { ok: false, reason: "no_asr_entry" }; // 二次兜底：探针可能漏判
-entry.click();
-await new Promise(r => setTimeout(r, 1500));
-
-// 2) 定位速记面板：旧 class 优先，失效则找"含最多消息块的滚动容器"
+// 1) 定位速记面板：旧 class 优先，失效则找"含最多消息块的滚动容器"
 function findPanel() {
   let p = document.querySelector("[class*=tertiaryContainer]");
   if (p) return p;
@@ -22,9 +13,33 @@ function findPanel() {
   cands.sort((a, b) => b.scrollHeight - a.scrollHeight);
   return cands[0] || document.body;
 }
-const panel = findPanel();
+function sectionsIn(p) {
+  return p ? Array.from(p.querySelectorAll("[class*=section__]")) : [];
+}
 
-// 3) 滚到底确认全量（观察为全量渲染，但必须验证条数稳定）
+// 2) 面板已渲染出内容就不要再点入口——入口是 toggle，重复点会把已展开的面板关掉
+if (sectionsIn(findPanel()).length === 0) {
+  let entry = Array.from(document.querySelectorAll("*"))
+    .find(e => e.children.length === 0 && (e.textContent || "").trim() === "面试速记");
+  if (!entry) entry = Array.from(document.querySelectorAll("[class*=minutes]"))
+    .find(e => (e.textContent || "").trim() === "面试速记");
+  if (!entry) return { ok: false, reason: "no_asr_entry" }; // 二次兜底：探针可能漏判
+  entry.click();
+}
+
+// 3) 轮询等到条数出现并连续稳定 3 次。固定 sleep 不够：面板渲染慢时 findPanel 会
+//    在 tertiaryContainer 还没挂上时兜底选中别的滚动容器，抽出 0 条误报 not_ready。
+let panel = null, secs = [], prev = -1, stable = 0;
+for (let i = 0; i < 40; i++) {
+  await new Promise(r => setTimeout(r, 500));
+  panel = findPanel();
+  secs = sectionsIn(panel);
+  if (secs.length > 0 && secs.length === prev) { if (++stable >= 3) break; } else stable = 0;
+  prev = secs.length;
+}
+if (!secs.length) return { ok: false, reason: "empty_after_wait" };
+
+// 4) 滚到底确认全量（观察为全量渲染，但必须验证条数稳定）
 function sections() {
   let s = panel.querySelectorAll("[class*=section__]");
   if (s.length) return Array.from(s);
@@ -32,16 +47,16 @@ function sections() {
   return Array.from(panel.querySelectorAll("div"))
     .filter(d => d.children.length && /\d{1,2}:\d{2}/.test(d.textContent || ""));
 }
-let prev = -1;
+let last = -1;
 for (let i = 0; i < 12; i++) {
   panel.scrollTop = panel.scrollHeight;
   await new Promise(r => setTimeout(r, 500));
   const n = sections().length;
-  if (n === prev) break;
-  prev = n;
+  if (n === last) break;
+  last = n;
 }
 
-// 4) 遍历消息块，抽 speaker / time / text
+// 5) 遍历消息块，抽 speaker / time / text
 function pick(el, hints) {
   for (const h of hints) { const x = el.querySelector(h); if (x && (x.textContent || "").trim()) return x.textContent.trim(); }
   return "";
