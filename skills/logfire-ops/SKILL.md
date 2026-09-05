@@ -48,6 +48,7 @@ description: 用 Logfire MCP 做生产可观测性的看板运维与根因分析
 
 - 「在 xxx 看板加个 5xx 趋势 panel」→ `references/dashboard-panels.md`：先 `dashboard_get` 拿现有 panel 当模板 → `dashboard_add_panel`。
 - 「每 10 分钟巡检一下生产有没有新 5xx」→ `references/monitoring-loop.md`：短时用 `/loop 10m <巡检 prompt>`；要挂几小时以上、或用户要腾出这个 session 跟进别的事 → 独立 cron + 消息推送（见该文「载体选择」）。
+- 「已经放到 0.5% 了，帮我盯一下」「现在怎么样？可以扩量吗？」→ `references/monitoring-loop.md` 的「阶梯放量盯守」：每档到点主动给放行判定（支持下一档 / 继续观察 / 回滚 + 通过标准对照表），播报第一行是结论、判读不外包给用户。
 - 「这个报错帮我看下根因」（给了 trace_id / run_id / project_id）→ `references/rca-trace.md`。
 - 「这个 bug 一天就几次，值得修吗」→ `references/quant-decision.md`：算频率 × 影响面 × 趋势。
 - 「读一下线上告警 / 报警群」→ `references/monitoring-loop.md` 的「告警就是 Logfire alert」：飞书群读不到原文，源头在 `alert_list` / `alert_history`。

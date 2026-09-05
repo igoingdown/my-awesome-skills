@@ -19,7 +19,7 @@ description: 用外部 CodeX CLI 对文档（spec/设计方案）、代码/PR、
 ## 前置条件
 
 - 评审对象已就绪（文档落盘 / 代码写完 / PR 分支存在）
-- `codex` CLI 可用（`which codex`，版本 ≥ 0.142.0）+ 已配模型（`~/.codex/config.toml`）
+- `codex` CLI 可用（`which codex`，版本 ≥ 0.142.0）+ 已配模型（`~/.codex/config.toml`）——默认模型要是当前最强可用的那个；用户宣布新模型可用时当轮切默认，不逐 session 靠 `-m` 覆盖（见 `references/codex-invocation.md`「模型」）
 - 启动加 `--search` 以启用 Web Search（SOP 取证的前提）
 
 ## 工作流
