@@ -40,7 +40,7 @@ Query OpenRouter account balance and send Feishu notification.
 
 ### CodeX Adversarial Review
 
-把 spec/设计方案、代码/PR 交给**外部 CodeX CLI** 做对抗式独立评审（独立模型、独立读码、职责是证伪而非附和），适合"方案已定将开工"或"代码写完将合入"的最后一道门。
+把 spec/设计方案、分析报告/runbook、代码/PR 交给**外部 CodeX CLI** 做对抗式独立评审（独立模型、独立读码、职责是证伪而非附和），适合"方案已定将开工"或"代码写完将合入"的最后一道门；分析报告类走"完整版过审 → 简洁版再过审 → 才交付"的两级链。
 
 使用示例：在 Claude Code 里说
 > "把这个方案发给 CodeX review" / "合入前找 CodeX 挑挑刺"
