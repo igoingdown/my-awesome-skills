@@ -23,7 +23,7 @@ codex --search exec \
 - **`--search`（顶层 flag）** —— 启用 CodeX 原生 `web_search` 工具，让它能联网取 SOP 出处。**这是"SOP 必带来源"的前提，不加这条则取证要求落空。** 注意必须是 `codex --search exec`，放到子命令后会报错。
 - **`-` + stdin 重定向** —— 把 prompt 文件喂给 CodeX（也可作为 `[PROMPT]` 参数，但 stdin 更稳，长文档不撞命令行长度限制）。
 - **`--cd <repo 根>`** —— 让 CodeX 在仓库根作业，才能按 file:line 打开文件核对。
-- **模型** —— 默认走 `~/.codex/config.toml`（本机 `gpt-5.5`）；要覆盖加 `-m <model>`。
+- **模型** —— 默认走 `~/.codex/config.toml` 的 `model`；单次覆盖加 `-m <model>`。**不要在 skill 或记忆里写死"本机用哪个模型"**——模型几周就换代，写死的名字很快过期还会把评审拖在旧模型上。规矩：深评一律用当前**最强可用**模型；用户宣布「CodeX 现在可以用 X 了 / 用 X 做深度 review」时，**当轮就把 `config.toml` 的默认 `model` 切到 X**（先跑一条最小 `codex exec` 核实该模型在当前 provider 下真能调通，再改默认），并在回复里报一句「默认已切到 X，后续 session 自动生效」，而不是只在本次命令上加 `-m`。同一句「现在可以用 X 了」被用户在多个 session 里重复告知，就是沉淀缺失的实锤——它和 working-discipline 里「新开通的通路当场沉淀，不靠用户逐 session 重复告知」是同一条纪律。双路差异化评审可按用户指定给两路不同模型。
 - **`--dangerously-bypass-approvals-and-sandbox`（`exec` 子命令选项）** —— 跳过所有审批提示并关闭沙箱。**这是评审能读全仓库文件、能临时写记录文件的前提**；缺它则默认 read-only 沙箱会卡住读取与写入，评审残缺。仅用于受控本地评审，禁改源码由评审指令在逻辑层兜底。
 - **沙箱** —— 用上面的 bypass flag 放开读写（替代默认 read-only）。评审仍只读不改源码：这一约束靠指令明令保证，而非靠沙箱限制。
 
