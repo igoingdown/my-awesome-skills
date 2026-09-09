@@ -193,7 +193,7 @@ Tipsy 后端的「告警即代码 / 看板推送 / 阈值校准」操作 skill�
 - **Weekly Report** — 每周一读上周所有 session，归纳成分类周报云文档并归档进索引。[skills/loop-weekly-report/SKILL.md](skills/loop-weekly-report/SKILL.md)
 - **Daily Retro** — 每天读昨天所有 session（可选叠加 IM 素材），生成「日记 + 自我改进项」并维护一篇持续累积的改进计划。[skills/loop-daily-retro/SKILL.md](skills/loop-daily-retro/SKILL.md)
 
-三者共享同一套范式：`cron + headless claude + digest 预提取 + 去敏配置外置`。
+三者共享同一套范式：`cron + headless claude + digest 预提取 + 去敏配置外置`，以及三条运行纪律：单次喂给 headless 的输入体量由 shell 保证有上界（超了就 map-reduce）；模型档位按任务复杂度 / 输入体量 / 时效选，换档后用真实体量复跑一次再算切换完成；确定性副作用（建文档、通知、归档）放在 shell 层，模型的活到写出本地文件为止（细节见 `loop-weekly-report` 的踩坑记录）。
 
 ## License
 
