@@ -90,7 +90,11 @@ while IFS= read -r d; do
     # "取样缺口"读起来像候选人的缺陷,实际是面试安排没覆盖到——归属都错了。
     # 改法：换成客观事实的说法（"本轮没有考察到""不作为对他的能力判断"
     # "本轮没有聊到""建议下一轮把 X 考察完整"）。
-    grep -qE 'coding-analysis\.md|review-log\.md|review-(sol|terra|luna)|取样单元|压分项|前置门|SKILL\.md|判分依据|取样缺口|未取样|补测|决策表' "$ev" \
+    # ⚠️ SKILL.md 要求前面带路径分隔或"本 skill"这类指代，避免误伤——
+    # 候选人自己的系统里也可能有同名文件（实测 2026-09-11：某候选人的 Agent 平台
+    # 用 skill 描述文件 + manifest 做上传门禁，asr 原话是「Skill点MD」，
+    # 报告如实写成 SKILL.md 就被这条拦下，属误报）。
+    grep -qE 'coding-analysis\.md|review-log\.md|review-(sol|terra|luna)|取样单元|压分项|前置门|(references/|本 ?skill 的 ?|见 ?)SKILL\.md|判分依据|取样缺口|未取样|补测|决策表' "$ev" \
       && gate+="含内部术语或断链引用 "
     # 维度表必须是六维：2026-09-08 规则把「编码与算法」从技术深度里拆成独立核心维度，
     # 就是因为一个符号承载不了同一维度内并存的正负证据。实测三份报告都仍用五维表头，
