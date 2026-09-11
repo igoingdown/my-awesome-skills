@@ -4,7 +4,27 @@
 |---|---|
 | `verify.sh` | 面评发布门禁：校验报告完整性与内容合规，退出码非 0 时调度脚本告警 |
 | `chrome-eval.sh` / `chrome-eval.jxa.js` | 在已登录的 Chrome 标签页里执行 JS（采集飞书招聘页面用） |
+| `multi-review.sh` | 发布门禁：3 模型 × 2 侧重共 6 路独立复核，退出码 1 = 有高危 findings |
 | `pdf2png.swift` | 简历 PDF 转长图 |
+
+> `verify.sh` 与 `multi-review.sh` 各有一份运行副本在 `~/hire_patrol/`，改动后两边要保持同步。
+
+## macOS 上不存在的两个命令（都踩过，且失败是静默的）
+
+| 命令 | 后果 |
+|---|---|
+| `setsid` | 用来脱离终端会导致整批 review 静默不启动。改用 `nohup ... </dev/null &`（脚本里已按此写） |
+| `timeout` | **2026-09-11 踩到**：`timeout 3000 ./multi-review.sh ...` 直接 `command not found`，但外层管道的退出码是 **0**——看起来像"review 跑完且无高危"，实际一路都没启动。手工调 review 时直接 `bash multi-review.sh <目录>`，脚本内部已有 40 分钟硬超时与多数完成宽限，不需要外部 timeout |
+
+> 共同点：两个命令都来自 GNU coreutils，Linux 上习惯成自然，macOS 默认没有。**失败形态都是"静默 + 退出码正常"**，比报错更危险。
+
+## 陈旧 review 文件会被当成本次结论（已加自动归档）
+
+`multi-review.sh` 判定"某路是否产出"用的是**文件非空**（`[[ -s "$REVIEW_DIR/${l}.md" ]]`），不看 mtime。所以目录里若残留上一版报告的 review 文件，等待循环会立刻判定已达多数、6 分钟宽限后杀掉正在跑的进程，并把**旧结论**汇总进 `SUMMARY.md`——看起来 review 过了，实际复核的是旧报告。
+
+2026-09-11 用新规则重写两份旧五维报告时踩到：目录里有 4 份前一天的 review 文件。
+
+脚本现在会自动检测并归档：任一 `*-pass*.md` 比 `evaluation.md` 更旧，就说明报告在上次 review 之后被重写过，整批 review 作废，移到 `review-stale-<evaluation.md 的 mtime>/`。
 
 ## verify.sh
 
