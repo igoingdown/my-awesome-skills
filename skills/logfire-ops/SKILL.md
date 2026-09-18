@@ -50,6 +50,8 @@ description: 用 Logfire MCP 做生产可观测性的看板运维与根因分析
 - 「每 10 分钟巡检一下生产有没有新 5xx」→ `references/monitoring-loop.md`：短时用 `/loop 10m <巡检 prompt>`；要挂几小时以上、或用户要腾出这个 session 跟进别的事 → 独立 cron + 消息推送（见该文「载体选择」）。
 - 「已经放到 0.5% 了，帮我盯一下」「现在怎么样？可以扩量吗？」→ `references/monitoring-loop.md` 的「阶梯放量盯守」：每档到点主动给放行判定（支持下一档 / 继续观察 / 回滚 + 通过标准对照表），播报第一行是结论、判读不外包给用户。
 - 「连续全绿好几轮了，这个盯守可以干掉吗？为什么？」→ `references/monitoring-loop.md` 的「退场纪律」：这句话本该由盯守方先说——退出条件要在代码里真实现、只被改动面内信号清零、常驻告警已覆盖的项不由盯守顶班；前提一失效就主动推「建议摘除 + 残余信号交给谁」。
+- 「这个告警又来了，根因是什么？」「这不是早就解决了吗，为什么巡检还在发？」→ `references/monitoring-loop.md` 巡检铁律的「已知项再次出现」条：推送自带上次结论、这次是否同形态、要不要动；排查结论回填脚本的已知项表，已解决的项不再推。
+- 「盯守半夜打了好几次电话，事故其实早结束了」「其他盯守脚本有没有共性问题，一起改了」→ `references/monitoring-loop.md` 的「加急判据与去重审计」条：错误类关键词绑定级别与字段、去重键归一化成事件类型、恢复态不再加急、改动前后用真阳性窗口回放，模板级问题修模板并扫全部在跑脚本。
 - 「这个报错帮我看下根因」（给了 trace_id / run_id / project_id）→ `references/rca-trace.md`。
 - 「这个 bug 一天就几次，值得修吗」→ `references/quant-decision.md`：算频率 × 影响面 × 趋势。
 - 「读一下线上告警 / 报警群」→ `references/monitoring-loop.md` 的「告警就是 Logfire alert」：飞书群读不到原文，源头在 `alert_list` / `alert_history`。
