@@ -111,6 +111,10 @@ def pin_datasource(dashboard: dict, ds: dict) -> None:
 REQUIRED_QUANTILES = ("0.5", "0.9", "0.95", "0.99")  # P50/P90/P95/P99, all four, one panel each
 # duration-like histograms only — size/count histograms (tokens, rows, ...) are exempt
 DURATION_METRIC_RE = re.compile(r"duration|latency|elapsed|lag|_seconds|_time_ms|_ms\b", re.I)
+# trend panels pin rate()/increase() to [1m]; [5m] is the ceiling (low-traffic buckets only)
+MAX_TREND_WINDOW_SECONDS = 300
+RANGE_UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+RATE_FUNC_RE = re.compile(r"\b(rate|increase|irate)\(")
 
 
 def _norm_quantile(raw: str) -> str:
@@ -130,9 +134,16 @@ def lint(dashboard: dict, path: Path) -> list[str]:
         title = panel.get("title", "?")
         if panel.get("type") == "timeseries":
             leg = panel.get("options", {}).get("legend", {})
-            if leg.get("calcs") != ["mean", "max"] or leg.get("sortBy") != "Mean" or not leg.get("sortDesc"):
+            calcs = leg.get("calcs") or []
+            if (leg.get("displayMode") != "table" or leg.get("placement") != "right"
+                    or "lastNotNull" not in calcs or "mean" not in calcs
+                    or leg.get("sortBy") != "Last *" or not leg.get("sortDesc")):
                 warnings.append(f"{path.name} / {title}: timeseries legend should be "
-                                'table with calcs ["mean","max"], sortBy "Mean" desc')
+                                'table/right with calcs ["lastNotNull","mean"], sortBy "Last *" desc')
+            for ov in panel.get("fieldConfig", {}).get("overrides", []) or []:
+                if ov.get("__systemRef") == "hideSeriesFrom":
+                    warnings.append(f"{path.name} / {title}: has a hideSeriesFrom override "
+                                    "(temporary series filter) — remove before pushing")
         if panel.get("type") in ("stat", "gauge", "bargauge"):
             calcs = panel.get("options", {}).get("reduceOptions", {}).get("calcs")
             if calcs and calcs != ["mean"]:
@@ -141,6 +152,16 @@ def lint(dashboard: dict, path: Path) -> list[str]:
         panel_is_duration = False
         for target in panel.get("targets", []):
             expr = target.get("expr", "") or ""
+            if "$__rate_interval" in expr:
+                warnings.append(f"{path.name} / {title}: uses $__rate_interval — pin the window "
+                                "([1m] for trend panels; [5m] only for low-traffic buckets, say so in the title)")
+            for n, unit in re.findall(r"\[(\d+)([smhd])(?::[^\]]*)?\]", expr):
+                secs = int(n) * RANGE_UNIT_SECONDS[unit]
+                if (panel.get("type") == "timeseries" and secs > MAX_TREND_WINDOW_SECONDS
+                        and RATE_FUNC_RE.search(expr)):
+                    warnings.append(f"{path.name} / {title}: rate/increase window [{n}{unit}] > 5m — "
+                                    "trend panels should be [1m] (or [5m] for low traffic, annotated)")
+                    break
             quantiles = {_norm_quantile(q) for q in
                          re.findall(r"histogram_quantile\(\s*([0-9.]+)", expr)}
             for metric in re.findall(r"([a-zA-Z_:][a-zA-Z0-9_:]*)_bucket\b", expr):
